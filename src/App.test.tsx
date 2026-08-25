@@ -19,7 +19,7 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'File Browser' }));
     expect(screen.getByRole('tab', { name: /File Browser/ })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'File Browser' })).not.toBeInTheDocument();
-    expect(screen.getByText('No files loaded')).toBeInTheDocument();
+    expect(screen.getByText('Connect to browse files')).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -59,6 +59,27 @@ describe('App', () => {
     expect(request.body).toBe(JSON.stringify({ account: 'staff', password: 'secret' }));
     expect(screen.getByText('Connected')).toBeInTheDocument();
     expect(screen.getByText('RC chat unavailable')).toBeInTheDocument();
+    fetchSpy.mockRestore();
+  });
+
+  it('lists files after the GameServer API session is authenticated', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('jwt-token', { headers: { 'content-type': 'text/plain' } })).mockResolvedValueOnce(new Response(JSON.stringify([
+      { name: 'world', path: 'world', isDirectory: true, size: null, modified: null },
+      { name: 'start.nw', path: 'start.nw', isDirectory: false, size: 2048, modified: '2026-08-25T12:00:00Z' }
+    ]), { headers: { 'content-type': 'application/json' } }));
+    render(<App />);
+    await user.type(screen.getByRole('textbox', { name: 'GameServer API' }), 'http://server.test');
+    await user.type(screen.getByRole('textbox', { name: 'Account' }), 'staff');
+    await user.type(screen.getByLabelText('Password'), 'secret');
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Connected to http://server.test.'));
+    await user.click(screen.getByRole('button', { name: 'File Browser' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'world' })).toBeInTheDocument());
+    expect(screen.getByText('start.nw')).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenNthCalledWith(2, 'http://server.test/api/v1/files', expect.objectContaining({ headers: expect.any(Headers) }));
+    const request = fetchSpy.mock.calls[1][1] as RequestInit;
+    expect((request.headers as Headers).get('Authorization')).toBe('Bearer jwt-token');
     fetchSpy.mockRestore();
   });
 

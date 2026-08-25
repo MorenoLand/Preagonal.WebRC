@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
@@ -12,18 +12,17 @@ import SearchIcon from '@mui/icons-material/Search';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import IconButton from '@mui/material/IconButton';
 import { navigationById, type NavigationItem } from '../navigation';
-import type { ApiFileEntry, GraalServer } from '../api/gameServerApi';
+import { ApiError, type ApiFileEntry, type GameServerApi, type GraalServer } from '../api/gameServerApi';
 import type { ActionNotice, ConnectionState, FeatureId, ServerDirectoryStatus } from '../types';
 import { DataTable, FeaturePanel, ToolRow } from './FeaturePanel';
 import { EmptyState } from './EmptyState';
-
-const emptyFileEntries: readonly ApiFileEntry[] = [];
 
 interface WorkspaceProps {
   activeFeature: FeatureId;
   openFeatures: FeatureId[];
   notice: ActionNotice | null;
   connectionState: ConnectionState;
+  gameServerApi: GameServerApi | null;
   onSelect: (feature: FeatureId) => void;
   onClose: (feature: FeatureId) => void;
   onAction: (feature: FeatureId, operation: string) => void;
@@ -34,14 +33,14 @@ interface WorkspaceProps {
   onUseServer: (server: GraalServer) => void;
 }
 
-export function Workspace({ activeFeature, openFeatures, notice, connectionState, onSelect, onClose, onAction, servers, serverDirectoryStatus, serverDirectoryError, onFetchServers, onUseServer }: WorkspaceProps) {
+export function Workspace({ activeFeature, openFeatures, notice, connectionState, gameServerApi, onSelect, onClose, onAction, servers, serverDirectoryStatus, serverDirectoryError, onFetchServers, onUseServer }: WorkspaceProps) {
   const item = navigationById[activeFeature];
   return (
     <main className="workspace">
       <div className="workspace-content">
         <TabBar activeFeature={activeFeature} openFeatures={openFeatures} onSelect={onSelect} onClose={onClose} />
         {notice && <div className={`notice notice-${notice.kind}`} role="status"><InfoOutlinedIcon /><span>{notice.text}</span></div>}
-        <FeatureContent item={item} connectionState={connectionState} onAction={onAction} servers={servers} serverDirectoryStatus={serverDirectoryStatus} serverDirectoryError={serverDirectoryError} onFetchServers={onFetchServers} onUseServer={onUseServer} />
+        <FeatureContent item={item} connectionState={connectionState} gameServerApi={gameServerApi} onAction={onAction} servers={servers} serverDirectoryStatus={serverDirectoryStatus} serverDirectoryError={serverDirectoryError} onFetchServers={onFetchServers} onUseServer={onUseServer} />
       </div>
     </main>
   );
@@ -72,6 +71,7 @@ function TabBar({ activeFeature, openFeatures, onSelect, onClose }: TabBarProps)
 interface FeatureContentProps {
   item: NavigationItem;
   connectionState: ConnectionState;
+  gameServerApi: GameServerApi | null;
   onAction: (feature: FeatureId, operation: string) => void;
   servers: readonly GraalServer[];
   serverDirectoryStatus: ServerDirectoryStatus;
@@ -80,12 +80,12 @@ interface FeatureContentProps {
   onUseServer: (server: GraalServer) => void;
 }
 
-function FeatureContent({ item, connectionState, onAction, servers, serverDirectoryStatus, serverDirectoryError, onFetchServers, onUseServer }: FeatureContentProps) {
+function FeatureContent({ item, connectionState, gameServerApi, onAction, servers, serverDirectoryStatus, serverDirectoryError, onFetchServers, onUseServer }: FeatureContentProps) {
   switch (item.id) {
     case 'chat': return <ChatPanel item={item} connectionState={connectionState} onAction={onAction} />;
     case 'players': return <PlayersPanel item={item} onAction={onAction} />;
     case 'servers': return <ServersPanel item={item} servers={servers} status={serverDirectoryStatus} error={serverDirectoryError} onFetchServers={onFetchServers} onUseServer={onUseServer} />;
-    case 'files': return <FileBrowserPanel item={item} onAction={onAction} />;
+    case 'files': return <FileBrowserPanel item={item} connectionState={connectionState} gameServerApi={gameServerApi} onAction={onAction} />;
     case 'server-options': return <EditorPanel item={item} operation="read server options" onAction={onAction} />;
     case 'folder-config': return <EditorPanel item={item} operation="read folder config" onAction={onAction} />;
     case 'server-flags': return <EditorPanel item={item} operation="read server flags" onAction={onAction} />;
@@ -194,21 +194,83 @@ function getServerEndpoint(server: GraalServer): string | null {
   return server.ip && server.ip !== '$AUTO' ? `http://${server.ip}` : null;
 }
 
-function FileBrowserPanel({ item, onAction }: PanelFeatureProps) {
+interface FileBrowserPanelProps extends PanelFeatureProps {
+  connectionState: ConnectionState;
+  gameServerApi: GameServerApi | null;
+}
+
+function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: FileBrowserPanelProps) {
   const [path, setPath] = useState('');
   const [query, setQuery] = useState('');
-  const visibleEntries = useMemo(() => emptyFileEntries.filter(entry => entry.name.toLowerCase().includes(query.toLowerCase())), [query]);
+  const [entries, setEntries] = useState<readonly ApiFileEntry[]>([]);
+  const [status, setStatus] = useState<FileBrowserStatus>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const canBrowse = connectionState === 'connected' && gameServerApi !== null;
+  const loadFiles = useCallback(() => {
+    if (!canBrowse || !gameServerApi) return;
+    setStatus('loading');
+    setError(null);
+    void gameServerApi.listFiles(path).then(nextEntries => {
+      setEntries(nextEntries);
+      setStatus('ready');
+    }).catch(reason => {
+      setEntries([]);
+      setStatus('error');
+      setError(getFileListingError(reason));
+    });
+  }, [canBrowse, gameServerApi, path]);
+  useEffect(() => {
+    if (!canBrowse) {
+      setEntries([]);
+      setStatus('idle');
+      setError(null);
+      return;
+    }
+    loadFiles();
+  }, [canBrowse, loadFiles]);
+  const visibleEntries = useMemo(() => entries.filter(entry => entry.name.toLowerCase().includes(query.toLowerCase()) || entry.path.toLowerCase().includes(query.toLowerCase())), [entries, query]);
+  const rows = visibleEntries.map(entry => {
+    const entryPath = entry.path || [path, entry.name].filter(Boolean).join('/');
+    return <tr key={entryPath}><td>{entry.isDirectory ? <Button className="path-button" onClick={() => setPath(entryPath)}>{entry.name}</Button> : <span>{entry.name}</span>}</td><td>{entry.isDirectory ? 'Directory' : 'File'}</td><td>{entry.isDirectory ? '—' : formatFileSize(entry.size)}</td><td>{formatFileModified(entry.modified)}</td><td /></tr>;
+  });
+  const emptyTitle = query ? 'No matching files' : 'No files in this folder';
   return <FeaturePanel title={item.label} description={item.description} icon={item.icon}>
     <ToolRow end={<>
-      <Button className="rc-button rc-button-muted" onClick={() => onAction(item.id, 'list files')} startIcon={<RefreshIcon />}>Refresh</Button>
-      <Button className="rc-button rc-button-muted" onClick={() => onAction(item.id, 'create directory')} startIcon={<CreateNewFolderOutlinedIcon />}>New folder</Button>
-      <Button className="rc-button rc-button-primary" onClick={() => onAction(item.id, 'upload file')} startIcon={<UploadFileIcon />}>Upload</Button>
+      <Button className="rc-button rc-button-muted" onClick={loadFiles} disabled={!canBrowse || status === 'loading'} startIcon={<RefreshIcon />}>Refresh</Button>
+      <Button className="rc-button rc-button-muted" onClick={() => onAction(item.id, 'create directory')} disabled={!canBrowse} startIcon={<CreateNewFolderOutlinedIcon />}>New folder</Button>
+      <Button className="rc-button rc-button-primary" onClick={() => onAction(item.id, 'upload file')} disabled={!canBrowse} startIcon={<UploadFileIcon />}>Upload</Button>
     </>}>
       <TextField className="rc-text-field compact-field" label="Filter files" placeholder="Name or path" value={query} onChange={event => setQuery(event.target.value)} InputProps={{ startAdornment: <SearchIcon className="field-icon" /> }} />
     </ToolRow>
     <div className="file-browser-path"><Button className="path-button" disabled={!path} onClick={() => setPath('')} startIcon={<ArrowBackIcon />}>Root</Button><span>/</span><strong>{path || 'content root'}</strong></div>
-    <DataTable columns={['Name', 'Type', 'Size', 'Modified', '']} emptyTitle={visibleEntries.length === 0 ? 'No files loaded' : 'No matching files'} emptyDescription="The visible entries will follow the GameServer ApiFileEntry contract." />
+    {!canBrowse && <EmptyState title="Connect to browse files" description="Authenticate to the GameServer API to list files allowed by the account." icon={item.icon} />}
+    {canBrowse && status === 'loading' && <EmptyState title="Loading files" description="Reading the current content directory from the GameServer API." icon={item.icon} />}
+    {canBrowse && status === 'error' && <EmptyState title="Unable to load files" description={error ?? 'The GameServer API did not return a file listing.'} icon={item.icon} action={<Button className="rc-button rc-button-muted" onClick={loadFiles}>Try again</Button>} />}
+    {canBrowse && status === 'ready' && <DataTable columns={['Name', 'Type', 'Size', 'Modified', '']} emptyTitle={emptyTitle} emptyDescription="No entries matched the current folder and filter." >{rows.length > 0 ? rows : undefined}</DataTable>}
   </FeaturePanel>;
+}
+
+type FileBrowserStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+function getFileListingError(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 401) return 'The GameServer API session is no longer authorized.';
+    return `File listing failed (${error.status}).`;
+  }
+  return error instanceof Error ? error.message : 'Could not load the file listing.';
+}
+
+function formatFileSize(size?: number | null): string {
+  if (size == null) return '—';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatFileModified(value?: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 interface EditorPanelProps extends PanelFeatureProps {

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { ApiError, ApiNotImplementedError, createHttpGameServerApi, createPlaceholderApi, createServerDirectoryApi, normalizeApiBaseUrl, type GraalServer } from './api/gameServerApi';
+import { ApiError, ApiNotImplementedError, createHttpGameServerApi, createPlaceholderApi, createServerDirectoryApi, normalizeApiBaseUrl, type GameServerApi, type GraalServer } from './api/gameServerApi';
 import { AppShell } from './components/AppShell';
 import { Sidebar } from './components/Sidebar';
 import { Workspace } from './components/Workspace';
@@ -101,7 +101,7 @@ export function App() {
   return <ThemeProvider theme={appTheme}>
     <CssBaseline />
     <AppShell sidebar={<Sidebar activeFeature={activeFeature} connection={connection} onSelect={openFeature} onConnectionChange={handleConnectionChange} onConnect={handleConnect} onFetchServers={handleFetchServers} fetchingServers={serverDirectoryStatus === 'loading'} connectionState={connectionState} />}>
-      <Workspace activeFeature={activeFeature} openFeatures={openFeatures} notice={notice} connectionState={connectionState} onSelect={openFeature} onClose={closeFeature} onAction={handleAction} servers={servers} serverDirectoryStatus={serverDirectoryStatus} serverDirectoryError={serverDirectoryError} onFetchServers={handleFetchServers} onUseServer={handleUseServer} />
+      <Workspace activeFeature={activeFeature} openFeatures={openFeatures} notice={notice} connectionState={connectionState} gameServerApi={gameServerApi as GameServerApi | null} onSelect={openFeature} onClose={closeFeature} onAction={handleAction} servers={servers} serverDirectoryStatus={serverDirectoryStatus} serverDirectoryError={serverDirectoryError} onFetchServers={handleFetchServers} onUseServer={handleUseServer} />
     </AppShell>
   </ThemeProvider>;
 }
