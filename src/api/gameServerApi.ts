@@ -200,11 +200,26 @@ function normalizeStats(body: string): ServerStats {
   return { levels: readNumber(payload, 'levels', 'Levels'), players: readNumber(payload, 'players', 'Players') };
 }
 
+function normalizeFileEntries(body: string): readonly ApiFileEntry[] {
+  const payload = JSON.parse(body);
+  if (!Array.isArray(payload)) throw new Error('The file listing response did not contain an array.');
+  return payload.map(value => {
+    const entry = asRecord(value, 'file listing entry');
+    const sizeValue = readValue(entry, 'size', 'Size');
+    const size = sizeValue == null ? sizeValue : Number(sizeValue);
+    return { name: readString(entry, 'name', 'Name'), path: readString(entry, 'path', 'Path'), isDirectory: Boolean(readValue(entry, 'isDirectory', 'IsDirectory')), size: size == null || Number.isFinite(size) ? size : null, modified: readValue(entry, 'modified', 'Modified') == null ? null : String(readValue(entry, 'modified', 'Modified')) };
+  });
+}
+
 export function normalizeFilePath(value: string): string {
   const normalized = value.replaceAll('\\', '/').split('/').filter(Boolean).join('/');
   if (normalized.includes(':') || normalized.split('/').some(part => part === '.' || part === '..'))
     throw new Error('File paths must remain relative to the GameServer content root.');
   return normalized;
+}
+
+function encodeFilePath(value: string): string {
+  return value.split('/').map(encodeURIComponent).join('/');
 }
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -243,12 +258,16 @@ export class HttpGameServerApi implements GameServerApi {
   async getFileContent(path: string): Promise<string> {
     const normalized = normalizeFilePath(path);
     if (!normalized) throw new Error('A file path is required.');
-    return this.readBody(`${this.baseUrl}/api/v1/files/${encodeURIComponent(normalized)}`, { headers: { Accept: 'text/plain, application/octet-stream' } }, 'File read');
+    return this.readBody(`${this.baseUrl}/api/v1/files/${encodeFilePath(normalized)}`, { headers: { Accept: 'text/plain, application/octet-stream' } }, 'File read');
   }
 
   async listFiles(path = ''): Promise<readonly ApiFileEntry[]> {
     const normalized = normalizeFilePath(path);
-    const entries = await this.run(() => normalized ? this.client.filesAll2(normalized) : this.client.filesAll());
+    if (normalized) {
+      const body = await this.readBody(`${this.baseUrl}/api/v1/files/${encodeFilePath(normalized)}`, { headers: { Accept: 'application/json' } }, 'File listing');
+      return normalizeFileEntries(body);
+    }
+    const entries = await this.run(() => this.client.filesAll());
     return entries.map(entry => ({ name: entry.name ?? '', path: entry.path ?? '', isDirectory: entry.isDirectory ?? false, size: entry.size, modified: entry.modified?.toISOString() ?? null }));
   }
 

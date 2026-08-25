@@ -28,8 +28,8 @@ describe('GameServerApi', () => {
     const fetchSpy = vi.fn().mockResolvedValue(response('[]'));
     const api = new HttpGameServerApi('http://server.test/', fetchSpy);
     api.setToken('jwt-token');
-    await api.listFiles('world');
-    expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/files/world', expect.objectContaining({ headers: expect.any(Headers) }));
+    await api.listFiles('world/levels');
+    expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/files/world/levels', expect.objectContaining({ headers: expect.any(Headers) }));
     const request = fetchSpy.mock.calls[0][1] as RequestInit;
     expect((request.headers as Headers).get('Authorization')).toBe('Bearer jwt-token');
   });
@@ -39,7 +39,7 @@ describe('GameServerApi', () => {
     const api = new HttpGameServerApi('http://server.test', fetchSpy);
     api.setToken('jwt-token');
     await expect(api.getFileContent('world/start.nw')).resolves.toBe('echo hi');
-    expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/files/world%2Fstart.nw', expect.objectContaining({ headers: expect.any(Headers) }));
+    expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/files/world/start.nw', expect.objectContaining({ headers: expect.any(Headers) }));
     const request = fetchSpy.mock.calls[0][1] as RequestInit;
     expect((request.headers as Headers).get('Authorization')).toBe('Bearer jwt-token');
   });
@@ -65,8 +65,8 @@ describe('GameServerApi', () => {
     const file = new File(['source'], 'start.nw', { type: 'text/plain' });
     await api.putFile('world/start.nw', file, { overwrite: true });
     await api.renameFile('world/start.nw', 'world/renamed.nw');
-    expect(fetchSpy).toHaveBeenNthCalledWith(1, 'http://server.test/api/v1/files/world%2Fstart.nw?overwrite=true', expect.objectContaining({ method: 'PUT', body: expect.any(FormData) }));
-    expect(fetchSpy).toHaveBeenNthCalledWith(2, 'http://server.test/api/v1/files/world%2Fstart.nw?destination=world%2Frenamed.nw', expect.objectContaining({ method: 'POST', body: expect.any(FormData) }));
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, 'http://server.test/api/v1/files/world/start.nw?overwrite=true', expect.objectContaining({ method: 'PUT', body: expect.any(FormData) }));
+    expect(fetchSpy).toHaveBeenNthCalledWith(2, 'http://server.test/api/v1/files/world/start.nw?destination=world%2Frenamed.nw', expect.objectContaining({ method: 'POST', body: expect.any(FormData) }));
     const uploadBody = (fetchSpy.mock.calls[0][1] as RequestInit).body as FormData;
     expect((uploadBody.get('file') as File).name).toBe('start.nw');
   });
@@ -75,7 +75,7 @@ describe('GameServerApi', () => {
     const fetchSpy = vi.fn().mockResolvedValue(response('', 204, ''));
     const api = new HttpGameServerApi('http://server.test', fetchSpy);
     await api.putFile('world/new-folder', undefined, { directory: true });
-    expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/files/world%2Fnew-folder?directory=true', expect.objectContaining({ method: 'PUT', body: expect.any(FormData) }));
+    expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/files/world/new-folder?directory=true', expect.objectContaining({ method: 'PUT', body: expect.any(FormData) }));
   });
 
   it('maps protected API failures to ApiError', async () => {

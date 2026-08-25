@@ -11,81 +11,96 @@
 export interface IGameServerClient {
 
     /**
+     * Lists the file-browser directories visible at the server root.
      * @return OK
      */
     filesAll(signal?: AbortSignal): Promise<ApiFileEntry[]>;
 
     /**
+     * Uploads a file or creates a directory.
      * @param directory (optional)
      * @param overwrite (optional)
      * @param file (optional)
-     * @return No Conten
+     * @return No Content
      */
     filesPUT(directory: boolean | undefined, overwrite: boolean | undefined, file: FileParameter | undefined, signal?: AbortSignal): Promise<void>;
 
     /**
+     * Updates an existing file or renames a file-browser entry.
      * @param destination (optional)
      * @param file (optional)
-     * @return OK
+     * @return No Content
      */
     filesPOST(destination: string | undefined, file: FileParameter | undefined, signal?: AbortSignal): Promise<void>;
 
     /**
-     * @return OK
+     * Deletes a file or empty directory.
+     * @return No Content
      */
     filesDELETE(signal?: AbortSignal): Promise<void>;
 
     /**
+     * Lists a file-browser directory or downloads a file.
      * @return OK
      */
-    filesAll2(path: string, signal?: AbortSignal): Promise<ApiFileEntry[]>;
+    filesGET(path: string, signal?: AbortSignal): Promise<void>;
 
     /**
+     * Uploads a file or creates a directory.
      * @param directory (optional)
      * @param overwrite (optional)
      * @param file (optional)
-     * @return No Conten
+     * @return No Content
      */
     filesPUT2(path: string, directory: boolean | undefined, overwrite: boolean | undefined, file: FileParameter | undefined, signal?: AbortSignal): Promise<void>;
 
     /**
+     * Updates an existing file or renames a file-browser entry.
      * @param destination (optional)
      * @param file (optional)
-     * @return OK
+     * @return No Content
      */
     filesPOST2(path: string, destination: string | undefined, file: FileParameter | undefined, signal?: AbortSignal): Promise<void>;
 
     /**
-     * @return OK
+     * Deletes a file or empty directory.
+     * @return No Content
      */
     filesDELETE2(path: string, signal?: AbortSignal): Promise<void>;
 
     /**
+     * Authenticates a staff account and returns an API bearer token.
      * @param body (optional)
      * @return OK
      */
     login(body: LoginRequest | undefined, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Gets the configured server message or upgrades a WebSocket player connection.
      * @return OK
      */
     anonymous(signal?: AbortSignal): Promise<void>;
 
     /**
+     * Gets the registered GScript types, functions, properties, and inheritance tree.
      * @return OK
      */
     definitions(signal?: AbortSignal): Promise<ScriptTypeMetadata[]>;
 
     /**
+     * Gets server-side script execution statistics.
      * @return OK
      */
     statsAll(signal?: AbortSignal): Promise<ScriptExecutionStatistic[]>;
 
     /**
+     * Gets the current GameServer level and player counts.
      * @return OK
      */
     stats(signal?: AbortSignal): Promise<void>;
 }
+
+function encodeFilePath(path) { return path.split("/").map(encodeURIComponent).join("/"); }
 
 export class GameServerClient implements IGameServerClient {
     private http: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> };
@@ -98,6 +113,7 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
+     * Lists the file-browser directories visible at the server root.
      * @return OK
      */
     filesAll(signal?: AbortSignal): Promise<ApiFileEntry[]> {
@@ -137,7 +153,10 @@ export class GameServerClient implements IGameServerClient {
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
-            return throwException("Unauthorized", status, _responseText, _headers);
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result401 = ProblemDetails.fromJS(resultData401, _mappings);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
             });
         } else if (status === 403) {
             return response.text().then((_responseText) => {
@@ -152,10 +171,11 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
+     * Uploads a file or creates a directory.
      * @param directory (optional)
      * @param overwrite (optional)
      * @param file (optional)
-     * @return No Conten
+     * @return No Content
      */
     filesPUT(directory: boolean | undefined, overwrite: boolean | undefined, file: FileParameter | undefined, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v1/files?";
@@ -205,11 +225,17 @@ export class GameServerClient implements IGameServerClient {
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
-            return throwException("Unauthorized", status, _responseText, _headers);
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result401 = ProblemDetails.fromJS(resultData401, _mappings);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
             });
         } else if (status === 403) {
             return response.text().then((_responseText) => {
-            return throwException("Forbidden", status, _responseText, _headers);
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result403 = ProblemDetails.fromJS(resultData403, _mappings);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
             });
         } else if (status === 409) {
             return response.text().then((_responseText) => {
@@ -227,9 +253,10 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
+     * Updates an existing file or renames a file-browser entry.
      * @param destination (optional)
      * @param file (optional)
-     * @return OK
+     * @return No Content
      */
     filesPOST(destination: string | undefined, file: FileParameter | undefined, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v1/files?";
@@ -261,17 +288,45 @@ export class GameServerClient implements IGameServerClient {
     protected processFilesPOST(response: Response): Promise<void> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
+        let _mappings: { source: any, target: any }[] = [];
+        if (status === 204) {
             return response.text().then((_responseText) => {
             return;
             });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            let resultData400 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result400 = ProblemDetails.fromJS(resultData400, _mappings);
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
-            return throwException("Unauthorized", status, _responseText, _headers);
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result401 = ProblemDetails.fromJS(resultData401, _mappings);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
             });
         } else if (status === 403) {
             return response.text().then((_responseText) => {
-            return throwException("Forbidden", status, _responseText, _headers);
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result403 = ProblemDetails.fromJS(resultData403, _mappings);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result404 = ProblemDetails.fromJS(resultData404, _mappings);
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            let resultData409 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result409 = ProblemDetails.fromJS(resultData409, _mappings);
+            return throwException("Conflict", status, _responseText, _headers, result409);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -282,7 +337,8 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
-     * @return OK
+     * Deletes a file or empty directory.
+     * @return No Content
      */
     filesDELETE(signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v1/files";
@@ -303,17 +359,45 @@ export class GameServerClient implements IGameServerClient {
     protected processFilesDELETE(response: Response): Promise<void> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
+        let _mappings: { source: any, target: any }[] = [];
+        if (status === 204) {
             return response.text().then((_responseText) => {
             return;
             });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            let resultData400 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result400 = ProblemDetails.fromJS(resultData400, _mappings);
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
-            return throwException("Unauthorized", status, _responseText, _headers);
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result401 = ProblemDetails.fromJS(resultData401, _mappings);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
             });
         } else if (status === 403) {
             return response.text().then((_responseText) => {
-            return throwException("Forbidden", status, _responseText, _headers);
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result403 = ProblemDetails.fromJS(resultData403, _mappings);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result404 = ProblemDetails.fromJS(resultData404, _mappings);
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            let resultData409 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result409 = ProblemDetails.fromJS(resultData409, _mappings);
+            return throwException("Conflict", status, _responseText, _headers, result409);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -324,73 +408,77 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
+     * Lists a file-browser directory or downloads a file.
      * @return OK
      */
-    filesAll2(path: string, signal?: AbortSignal): Promise<ApiFileEntry[]> {
+    filesGET(path: string, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v1/files/{path}";
         if (path === undefined || path === null)
             throw new globalThis.Error("The parameter 'path' must be defined.");
-        url_ = url_.replace("{path}", encodeURIComponent("" + path));
+        url_ = url_.replace("{path}", encodeFilePath(path));
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
             method: "GET",
             signal,
             headers: {
-                "Accept": "application/json"
             }
         };
 
         return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processFilesAll2(_response);
+            return this.processFilesGET(_response);
         });
     }
 
-    protected processFilesAll2(response: Response): Promise<ApiFileEntry[]> {
+    protected processFilesGET(response: Response): Promise<void> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         let _mappings: { source: any, target: any }[] = [];
         if (status === 200) {
             return response.text().then((_responseText) => {
-            let result200: any = null;
-            let resultData200 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
-            if (Array.isArray(resultData200)) {
-                result200 = [] as any;
-                for (let item of resultData200)
-                    result200!.push(ApiFileEntry.fromJS(item, _mappings));
-            }
-            else {
-                result200 = null as any;
-            }
-            return result200;
+            return;
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
-            return throwException("Unauthorized", status, _responseText, _headers);
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result401 = ProblemDetails.fromJS(resultData401, _mappings);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
             });
         } else if (status === 403) {
             return response.text().then((_responseText) => {
-            return throwException("Forbidden", status, _responseText, _headers);
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result403 = ProblemDetails.fromJS(resultData403, _mappings);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result404 = ProblemDetails.fromJS(resultData404, _mappings);
+            return throwException("Not Found", status, _responseText, _headers, result404);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<ApiFileEntry[]>(null as any);
+        return Promise.resolve<void>(null as any);
     }
 
     /**
+     * Uploads a file or creates a directory.
      * @param directory (optional)
      * @param overwrite (optional)
      * @param file (optional)
-     * @return No Conten
+     * @return No Content
      */
     filesPUT2(path: string, directory: boolean | undefined, overwrite: boolean | undefined, file: FileParameter | undefined, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v1/files/{path}?";
         if (path === undefined || path === null)
             throw new globalThis.Error("The parameter 'path' must be defined.");
-        url_ = url_.replace("{path}", encodeURIComponent("" + path));
+        url_ = url_.replace("{path}", encodeFilePath(path));
         if (directory === null)
             throw new globalThis.Error("The parameter 'directory' cannot be null.");
         else if (directory !== undefined)
@@ -437,11 +525,17 @@ export class GameServerClient implements IGameServerClient {
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
-            return throwException("Unauthorized", status, _responseText, _headers);
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result401 = ProblemDetails.fromJS(resultData401, _mappings);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
             });
         } else if (status === 403) {
             return response.text().then((_responseText) => {
-            return throwException("Forbidden", status, _responseText, _headers);
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result403 = ProblemDetails.fromJS(resultData403, _mappings);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
             });
         } else if (status === 409) {
             return response.text().then((_responseText) => {
@@ -459,15 +553,16 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
+     * Updates an existing file or renames a file-browser entry.
      * @param destination (optional)
      * @param file (optional)
-     * @return OK
+     * @return No Content
      */
     filesPOST2(path: string, destination: string | undefined, file: FileParameter | undefined, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v1/files/{path}?";
         if (path === undefined || path === null)
             throw new globalThis.Error("The parameter 'path' must be defined.");
-        url_ = url_.replace("{path}", encodeURIComponent("" + path));
+        url_ = url_.replace("{path}", encodeFilePath(path));
         if (destination === null)
             throw new globalThis.Error("The parameter 'destination' cannot be null.");
         else if (destination !== undefined)
@@ -496,17 +591,45 @@ export class GameServerClient implements IGameServerClient {
     protected processFilesPOST2(response: Response): Promise<void> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
+        let _mappings: { source: any, target: any }[] = [];
+        if (status === 204) {
             return response.text().then((_responseText) => {
             return;
             });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            let resultData400 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result400 = ProblemDetails.fromJS(resultData400, _mappings);
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
-            return throwException("Unauthorized", status, _responseText, _headers);
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result401 = ProblemDetails.fromJS(resultData401, _mappings);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
             });
         } else if (status === 403) {
             return response.text().then((_responseText) => {
-            return throwException("Forbidden", status, _responseText, _headers);
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result403 = ProblemDetails.fromJS(resultData403, _mappings);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result404 = ProblemDetails.fromJS(resultData404, _mappings);
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            let resultData409 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result409 = ProblemDetails.fromJS(resultData409, _mappings);
+            return throwException("Conflict", status, _responseText, _headers, result409);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -517,13 +640,14 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
-     * @return OK
+     * Deletes a file or empty directory.
+     * @return No Content
      */
     filesDELETE2(path: string, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/api/v1/files/{path}";
         if (path === undefined || path === null)
             throw new globalThis.Error("The parameter 'path' must be defined.");
-        url_ = url_.replace("{path}", encodeURIComponent("" + path));
+        url_ = url_.replace("{path}", encodeFilePath(path));
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -541,17 +665,45 @@ export class GameServerClient implements IGameServerClient {
     protected processFilesDELETE2(response: Response): Promise<void> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
+        let _mappings: { source: any, target: any }[] = [];
+        if (status === 204) {
             return response.text().then((_responseText) => {
             return;
             });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            let resultData400 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result400 = ProblemDetails.fromJS(resultData400, _mappings);
+            return throwException("Bad Request", status, _responseText, _headers, result400);
+            });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
-            return throwException("Unauthorized", status, _responseText, _headers);
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result401 = ProblemDetails.fromJS(resultData401, _mappings);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
             });
         } else if (status === 403) {
             return response.text().then((_responseText) => {
-            return throwException("Forbidden", status, _responseText, _headers);
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result403 = ProblemDetails.fromJS(resultData403, _mappings);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result404 = ProblemDetails.fromJS(resultData404, _mappings);
+            return throwException("Not Found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            let resultData409 = _responseText === "" ? null : jsonParse(_responseText, this.jsonParseReviver);
+            result409 = ProblemDetails.fromJS(resultData409, _mappings);
+            return throwException("Conflict", status, _responseText, _headers, result409);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -562,6 +714,7 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
+     * Authenticates a staff account and returns an API bearer token.
      * @param body (optional)
      * @return OK
      */
@@ -618,6 +771,7 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
+     * Gets the configured server message or upgrades a WebSocket player connection.
      * @return OK
      */
     anonymous(signal?: AbortSignal): Promise<void> {
@@ -667,6 +821,7 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
+     * Gets the registered GScript types, functions, properties, and inheritance tree.
      * @return OK
      */
     definitions(signal?: AbortSignal): Promise<ScriptTypeMetadata[]> {
@@ -721,6 +876,7 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
+     * Gets server-side script execution statistics.
      * @return OK
      */
     statsAll(signal?: AbortSignal): Promise<ScriptExecutionStatistic[]> {
@@ -775,6 +931,7 @@ export class GameServerClient implements IGameServerClient {
     }
 
     /**
+     * Gets the current GameServer level and player counts.
      * @return OK
      */
     stats(signal?: AbortSignal): Promise<void> {
@@ -825,11 +982,11 @@ export class GameServerClient implements IGameServerClient {
 }
 
 export class ApiFileEntry implements IApiFileEntry {
-    name?: string | undefined;
-    path?: string | undefined;
+    name?: string | null;
+    path?: string | null;
     isDirectory?: boolean;
-    size?: number | undefined;
-    modified?: Date | undefined;
+    size?: number | null;
+    modified?: Date | null;
 
     constructor(data?: IApiFileEntry) {
         if (data) {
@@ -842,11 +999,11 @@ export class ApiFileEntry implements IApiFileEntry {
 
     init(_data?: any, _mappings?: any) {
         if (_data) {
-            this.name = _data["name"];
-            this.path = _data["path"];
-            this.isDirectory = _data["isDirectory"];
-            this.size = _data["size"];
-            this.modified = _data["modified"] ? new Date(_data["modified"].toString()) : undefined as any;
+            this.name = _data["name"] !== undefined ? _data["name"] : null as any;
+            this.path = _data["path"] !== undefined ? _data["path"] : null as any;
+            this.isDirectory = _data["isDirectory"] !== undefined ? _data["isDirectory"] : null as any;
+            this.size = _data["size"] !== undefined ? _data["size"] : null as any;
+            this.modified = _data["modified"] ? new Date(_data["modified"].toString()) : null as any;
         }
     }
 
@@ -857,21 +1014,21 @@ export class ApiFileEntry implements IApiFileEntry {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["name"] = this.name;
-        data["path"] = this.path;
-        data["isDirectory"] = this.isDirectory;
-        data["size"] = this.size;
-        data["modified"] = this.modified ? this.modified.toISOString() : undefined as any;
+        data["name"] = this.name !== undefined ? this.name : null as any;
+        data["path"] = this.path !== undefined ? this.path : null as any;
+        data["isDirectory"] = this.isDirectory !== undefined ? this.isDirectory : null as any;
+        data["size"] = this.size !== undefined ? this.size : null as any;
+        data["modified"] = this.modified ? this.modified.toISOString() : null as any;
         return data;
     }
 }
 
 export interface IApiFileEntry {
-    name?: string | undefined;
-    path?: string | undefined;
+    name?: string | null;
+    path?: string | null;
     isDirectory?: boolean;
-    size?: number | undefined;
-    modified?: Date | undefined;
+    size?: number | null;
+    modified?: Date | null;
 }
 
 export class LoginRequest implements ILoginRequest {
@@ -889,8 +1046,8 @@ export class LoginRequest implements ILoginRequest {
 
     init(_data?: any, _mappings?: any) {
         if (_data) {
-            this.account = _data["account"];
-            this.password = _data["password"];
+            this.account = _data["account"] !== undefined ? _data["account"] : null as any;
+            this.password = _data["password"] !== undefined ? _data["password"] : null as any;
         }
     }
 
@@ -901,8 +1058,8 @@ export class LoginRequest implements ILoginRequest {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["account"] = this.account;
-        data["password"] = this.password;
+        data["account"] = this.account !== undefined ? this.account : null as any;
+        data["password"] = this.password !== undefined ? this.password : null as any;
         return data;
     }
 }
@@ -913,11 +1070,11 @@ export interface ILoginRequest {
 }
 
 export class ProblemDetails implements IProblemDetails {
-    type?: string | undefined;
-    title?: string | undefined;
-    status?: number | undefined;
-    detail?: string | undefined;
-    instance?: string | undefined;
+    type?: string | null;
+    title?: string | null;
+    status?: number | null;
+    detail?: string | null;
+    instance?: string | null;
 
     [key: string]: any;
 
@@ -936,11 +1093,11 @@ export class ProblemDetails implements IProblemDetails {
                 if (_data.hasOwnProperty(property))
                     this[property] = _data[property];
             }
-            this.type = _data["type"];
-            this.title = _data["title"];
-            this.status = _data["status"];
-            this.detail = _data["detail"];
-            this.instance = _data["instance"];
+            this.type = _data["type"] !== undefined ? _data["type"] : null as any;
+            this.title = _data["title"] !== undefined ? _data["title"] : null as any;
+            this.status = _data["status"] !== undefined ? _data["status"] : null as any;
+            this.detail = _data["detail"] !== undefined ? _data["detail"] : null as any;
+            this.instance = _data["instance"] !== undefined ? _data["instance"] : null as any;
         }
     }
 
@@ -955,27 +1112,27 @@ export class ProblemDetails implements IProblemDetails {
             if (this.hasOwnProperty(property))
                 data[property] = this[property];
         }
-        data["type"] = this.type;
-        data["title"] = this.title;
-        data["status"] = this.status;
-        data["detail"] = this.detail;
-        data["instance"] = this.instance;
+        data["type"] = this.type !== undefined ? this.type : null as any;
+        data["title"] = this.title !== undefined ? this.title : null as any;
+        data["status"] = this.status !== undefined ? this.status : null as any;
+        data["detail"] = this.detail !== undefined ? this.detail : null as any;
+        data["instance"] = this.instance !== undefined ? this.instance : null as any;
         return data;
     }
 }
 
 export interface IProblemDetails {
-    type?: string | undefined;
-    title?: string | undefined;
-    status?: number | undefined;
-    detail?: string | undefined;
-    instance?: string | undefined;
+    type?: string | null;
+    title?: string | null;
+    status?: number | null;
+    detail?: string | null;
+    instance?: string | null;
 
     [key: string]: any;
 }
 
 export class ScriptExecutionStatistic implements IScriptExecutionStatistic {
-    name?: string | undefined;
+    name?: string | null;
     executionTime?: string;
     executionCount?: number;
 
@@ -990,9 +1147,9 @@ export class ScriptExecutionStatistic implements IScriptExecutionStatistic {
 
     init(_data?: any, _mappings?: any) {
         if (_data) {
-            this.name = _data["name"];
-            this.executionTime = _data["executionTime"];
-            this.executionCount = _data["executionCount"];
+            this.name = _data["name"] !== undefined ? _data["name"] : null as any;
+            this.executionTime = _data["executionTime"] !== undefined ? _data["executionTime"] : null as any;
+            this.executionCount = _data["executionCount"] !== undefined ? _data["executionCount"] : null as any;
         }
     }
 
@@ -1003,24 +1160,24 @@ export class ScriptExecutionStatistic implements IScriptExecutionStatistic {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["name"] = this.name;
-        data["executionTime"] = this.executionTime;
-        data["executionCount"] = this.executionCount;
+        data["name"] = this.name !== undefined ? this.name : null as any;
+        data["executionTime"] = this.executionTime !== undefined ? this.executionTime : null as any;
+        data["executionCount"] = this.executionCount !== undefined ? this.executionCount : null as any;
         return data;
     }
 }
 
 export interface IScriptExecutionStatistic {
-    name?: string | undefined;
+    name?: string | null;
     executionTime?: string;
     executionCount?: number;
 }
 
 export class ScriptFunctionMetadata implements IScriptFunctionMetadata {
-    name?: string | undefined;
-    description?: string | undefined;
-    returnType?: string | undefined;
-    parameters?: ScriptFunctionParameterMetadata[] | undefined;
+    name?: string | null;
+    description?: string | null;
+    returnType?: string | null;
+    parameters?: ScriptFunctionParameterMetadata[] | null;
 
     constructor(data?: IScriptFunctionMetadata) {
         if (data) {
@@ -1033,13 +1190,16 @@ export class ScriptFunctionMetadata implements IScriptFunctionMetadata {
 
     init(_data?: any, _mappings?: any) {
         if (_data) {
-            this.name = _data["name"];
-            this.description = _data["description"];
-            this.returnType = _data["returnType"];
+            this.name = _data["name"] !== undefined ? _data["name"] : null as any;
+            this.description = _data["description"] !== undefined ? _data["description"] : null as any;
+            this.returnType = _data["returnType"] !== undefined ? _data["returnType"] : null as any;
             if (Array.isArray(_data["parameters"])) {
                 this.parameters = [] as any;
                 for (let item of _data["parameters"])
                     this.parameters!.push(ScriptFunctionParameterMetadata.fromJS(item, _mappings));
+            }
+            else {
+                this.parameters = null as any;
             }
         }
     }
@@ -1051,29 +1211,29 @@ export class ScriptFunctionMetadata implements IScriptFunctionMetadata {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["name"] = this.name;
-        data["description"] = this.description;
-        data["returnType"] = this.returnType;
+        data["name"] = this.name !== undefined ? this.name : null as any;
+        data["description"] = this.description !== undefined ? this.description : null as any;
+        data["returnType"] = this.returnType !== undefined ? this.returnType : null as any;
         if (Array.isArray(this.parameters)) {
             data["parameters"] = [];
             for (let item of this.parameters)
-                data["parameters"].push(item ? item.toJSON() : undefined as any);
+                data["parameters"].push(item ? item.toJSON() : null as any);
         }
         return data;
     }
 }
 
 export interface IScriptFunctionMetadata {
-    name?: string | undefined;
-    description?: string | undefined;
-    returnType?: string | undefined;
-    parameters?: ScriptFunctionParameterMetadata[] | undefined;
+    name?: string | null;
+    description?: string | null;
+    returnType?: string | null;
+    parameters?: ScriptFunctionParameterMetadata[] | null;
 }
 
 export class ScriptFunctionParameterMetadata implements IScriptFunctionParameterMetadata {
-    name?: string | undefined;
-    type?: string | undefined;
-    optional?: boolean | undefined;
+    name?: string | null;
+    type?: string | null;
+    optional?: boolean | null;
 
     constructor(data?: IScriptFunctionParameterMetadata) {
         if (data) {
@@ -1086,9 +1246,9 @@ export class ScriptFunctionParameterMetadata implements IScriptFunctionParameter
 
     init(_data?: any, _mappings?: any) {
         if (_data) {
-            this.name = _data["name"];
-            this.type = _data["type"];
-            this.optional = _data["optional"];
+            this.name = _data["name"] !== undefined ? _data["name"] : null as any;
+            this.type = _data["type"] !== undefined ? _data["type"] : null as any;
+            this.optional = _data["optional"] !== undefined ? _data["optional"] : null as any;
         }
     }
 
@@ -1099,23 +1259,23 @@ export class ScriptFunctionParameterMetadata implements IScriptFunctionParameter
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["name"] = this.name;
-        data["type"] = this.type;
-        data["optional"] = this.optional;
+        data["name"] = this.name !== undefined ? this.name : null as any;
+        data["type"] = this.type !== undefined ? this.type : null as any;
+        data["optional"] = this.optional !== undefined ? this.optional : null as any;
         return data;
     }
 }
 
 export interface IScriptFunctionParameterMetadata {
-    name?: string | undefined;
-    type?: string | undefined;
-    optional?: boolean | undefined;
+    name?: string | null;
+    type?: string | null;
+    optional?: boolean | null;
 }
 
 export class ScriptPropertyMetadata implements IScriptPropertyMetadata {
-    name?: string | undefined;
-    description?: string | undefined;
-    type?: string | undefined;
+    name?: string | null;
+    description?: string | null;
+    type?: string | null;
     readOnly?: boolean;
 
     constructor(data?: IScriptPropertyMetadata) {
@@ -1129,10 +1289,10 @@ export class ScriptPropertyMetadata implements IScriptPropertyMetadata {
 
     init(_data?: any, _mappings?: any) {
         if (_data) {
-            this.name = _data["name"];
-            this.description = _data["description"];
-            this.type = _data["type"];
-            this.readOnly = _data["readOnly"];
+            this.name = _data["name"] !== undefined ? _data["name"] : null as any;
+            this.description = _data["description"] !== undefined ? _data["description"] : null as any;
+            this.type = _data["type"] !== undefined ? _data["type"] : null as any;
+            this.readOnly = _data["readOnly"] !== undefined ? _data["readOnly"] : null as any;
         }
     }
 
@@ -1143,27 +1303,27 @@ export class ScriptPropertyMetadata implements IScriptPropertyMetadata {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["name"] = this.name;
-        data["description"] = this.description;
-        data["type"] = this.type;
-        data["readOnly"] = this.readOnly;
+        data["name"] = this.name !== undefined ? this.name : null as any;
+        data["description"] = this.description !== undefined ? this.description : null as any;
+        data["type"] = this.type !== undefined ? this.type : null as any;
+        data["readOnly"] = this.readOnly !== undefined ? this.readOnly : null as any;
         return data;
     }
 }
 
 export interface IScriptPropertyMetadata {
-    name?: string | undefined;
-    description?: string | undefined;
-    type?: string | undefined;
+    name?: string | null;
+    description?: string | null;
+    type?: string | null;
     readOnly?: boolean;
 }
 
 export class ScriptTypeMetadata implements IScriptTypeMetadata {
-    name?: string | undefined;
-    parentType?: string | undefined;
-    functions?: ScriptFunctionMetadata[] | undefined;
-    properties?: ScriptPropertyMetadata[] | undefined;
-    children?: ScriptTypeMetadata[] | undefined;
+    name?: string | null;
+    parentType?: string | null;
+    functions?: ScriptFunctionMetadata[] | null;
+    properties?: ScriptPropertyMetadata[] | null;
+    children?: ScriptTypeMetadata[] | null;
 
     constructor(data?: IScriptTypeMetadata) {
         if (data) {
@@ -1176,22 +1336,31 @@ export class ScriptTypeMetadata implements IScriptTypeMetadata {
 
     init(_data?: any, _mappings?: any) {
         if (_data) {
-            this.name = _data["name"];
-            this.parentType = _data["parentType"];
+            this.name = _data["name"] !== undefined ? _data["name"] : null as any;
+            this.parentType = _data["parentType"] !== undefined ? _data["parentType"] : null as any;
             if (Array.isArray(_data["functions"])) {
                 this.functions = [] as any;
                 for (let item of _data["functions"])
                     this.functions!.push(ScriptFunctionMetadata.fromJS(item, _mappings));
+            }
+            else {
+                this.functions = null as any;
             }
             if (Array.isArray(_data["properties"])) {
                 this.properties = [] as any;
                 for (let item of _data["properties"])
                     this.properties!.push(ScriptPropertyMetadata.fromJS(item, _mappings));
             }
+            else {
+                this.properties = null as any;
+            }
             if (Array.isArray(_data["children"])) {
                 this.children = [] as any;
                 for (let item of _data["children"])
                     this.children!.push(ScriptTypeMetadata.fromJS(item, _mappings));
+            }
+            else {
+                this.children = null as any;
             }
         }
     }
@@ -1203,33 +1372,33 @@ export class ScriptTypeMetadata implements IScriptTypeMetadata {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["name"] = this.name;
-        data["parentType"] = this.parentType;
+        data["name"] = this.name !== undefined ? this.name : null as any;
+        data["parentType"] = this.parentType !== undefined ? this.parentType : null as any;
         if (Array.isArray(this.functions)) {
             data["functions"] = [];
             for (let item of this.functions)
-                data["functions"].push(item ? item.toJSON() : undefined as any);
+                data["functions"].push(item ? item.toJSON() : null as any);
         }
         if (Array.isArray(this.properties)) {
             data["properties"] = [];
             for (let item of this.properties)
-                data["properties"].push(item ? item.toJSON() : undefined as any);
+                data["properties"].push(item ? item.toJSON() : null as any);
         }
         if (Array.isArray(this.children)) {
             data["children"] = [];
             for (let item of this.children)
-                data["children"].push(item ? item.toJSON() : undefined as any);
+                data["children"].push(item ? item.toJSON() : null as any);
         }
         return data;
     }
 }
 
 export interface IScriptTypeMetadata {
-    name?: string | undefined;
-    parentType?: string | undefined;
-    functions?: ScriptFunctionMetadata[] | undefined;
-    properties?: ScriptPropertyMetadata[] | undefined;
-    children?: ScriptTypeMetadata[] | undefined;
+    name?: string | null;
+    parentType?: string | null;
+    functions?: ScriptFunctionMetadata[] | null;
+    properties?: ScriptPropertyMetadata[] | null;
+    children?: ScriptTypeMetadata[] | null;
 }
 
 function jsonParse(json: any, reviver?: any) {
