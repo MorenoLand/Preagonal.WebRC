@@ -57,8 +57,10 @@ describe('App', () => {
     expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/login', expect.objectContaining({ method: 'POST' }));
     const request = fetchSpy.mock.calls[0][1] as RequestInit;
     expect(request.body).toBe(JSON.stringify({ account: 'staff', password: 'secret' }));
-    await waitFor(() => expect(screen.getByText('SharpServer TEST')).toBeInTheDocument());
+    await waitFor(() => expect(document.querySelector('.summary-status-label')).toHaveTextContent('SharpServer TEST'));
     expect(screen.queryByText('Connected · server.test')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit connection details' }));
+    expect(screen.getByRole('textbox', { name: 'GameServer API' })).toBeVisible();
     expect(screen.getByText('RC chat unavailable')).toBeInTheDocument();
     fetchSpy.mockRestore();
   });

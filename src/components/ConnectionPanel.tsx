@@ -1,9 +1,13 @@
+import { useEffect, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import TextField from '@mui/material/TextField';
-import Button from '@mui/material/Button';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
 import DownloadIcon from '@mui/icons-material/Download';
-import type { ConnectionForm } from '../types';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import type { ConnectionForm, ConnectionState } from '../types';
 
 interface ConnectionPanelProps {
   value: ConnectionForm;
@@ -12,11 +16,19 @@ interface ConnectionPanelProps {
   onFetchServers: () => void;
   fetchingServers?: boolean;
   connecting?: boolean;
+  connectionName?: string;
+  connectionState: ConnectionState;
 }
 
-export function ConnectionPanel({ value, onChange, onConnect, onFetchServers, fetchingServers = false, connecting = false }: ConnectionPanelProps) {
+export function ConnectionPanel({ value, onChange, onConnect, onFetchServers, fetchingServers = false, connecting = false, connectionName = '', connectionState }: ConnectionPanelProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  useEffect(() => { if (connectionState !== 'connected') setDetailsOpen(false); }, [connectionState]);
   const update = (field: keyof ConnectionForm) => (event: ChangeEvent<HTMLInputElement>) => onChange({ ...value, [field]: event.target.value });
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); onConnect(); };
+  if (connectionState === 'connected' && !detailsOpen) return <div className="connection-panel connection-panel-collapsed">
+    <div className="connection-collapsed-copy"><span className="connection-collapsed-name"><DnsOutlinedIcon />{connectionName || value.endpoint || 'GameServer API'}</span><span className="connection-collapsed-endpoint">{value.endpoint || 'API endpoint'}</span></div>
+    <Tooltip title="Edit connection details"><IconButton className="connection-expand-button" aria-label="Edit connection details" onClick={() => setDetailsOpen(true)}><EditOutlinedIcon /></IconButton></Tooltip>
+  </div>;
   return (
     <form className="connection-panel" onSubmit={submit}>
       <div className="connection-heading"><span>CONNECTION</span><span className="connection-dot" /></div>
@@ -25,8 +37,8 @@ export function ConnectionPanel({ value, onChange, onConnect, onFetchServers, fe
       <TextField className="rc-text-field" label="Account" value={value.account} onChange={update('account')} autoComplete="username" fullWidth />
       <TextField className="rc-text-field" label="Password" type="password" value={value.password} onChange={update('password')} autoComplete="current-password" fullWidth />
       <div className="connection-actions">
-        <Button className="rc-button rc-button-muted" type="button" onClick={onFetchServers} disabled={fetchingServers} startIcon={<DownloadIcon />}>{fetchingServers ? 'Fetching…' : 'Fetch Servers'}</Button>
-        <Button className="rc-button rc-button-primary" type="submit" disabled={connecting} endIcon={<ArrowForwardIcon />}>{connecting ? 'Connecting…' : 'Connect'}</Button>
+        <Tooltip title={fetchingServers ? 'Fetching servers…' : 'Fetch servers'}><span><IconButton className="connection-action-icon" type="button" onClick={onFetchServers} disabled={fetchingServers} aria-label="Fetch Servers"><DownloadIcon /></IconButton></span></Tooltip>
+        <Tooltip title={connecting ? 'Connecting…' : 'Connect'}><span><IconButton className="connection-action-icon connection-action-connect" type="submit" disabled={connecting} aria-label="Connect"><ArrowForwardIcon /></IconButton></span></Tooltip>
       </div>
     </form>
   );

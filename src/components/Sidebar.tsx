@@ -33,7 +33,7 @@ export function Sidebar({ activeFeature, connection, connectionName, onSelect, o
       <nav className="sidebar-navigation" aria-label="Remote control navigation">
         {navigationGroups.map(group => <NavigationSection key={group.label} group={group} activeFeature={activeFeature} onSelect={onSelect} />)}
       </nav>
-      <ConnectionPanel value={connection} onChange={onConnectionChange} onConnect={onConnect} onFetchServers={onFetchServers} fetchingServers={fetchingServers} connecting={connectionState === 'connecting'} />
+      <ConnectionPanel value={connection} connectionName={connectionName} connectionState={connectionState} onChange={onConnectionChange} onConnect={onConnect} onFetchServers={onFetchServers} fetchingServers={fetchingServers} connecting={connectionState === 'connecting'} />
     </aside>
   );
 }
