@@ -78,4 +78,12 @@ describe('GameServerApi', () => {
     await api.listServers();
     expect(fetchSpy).toHaveBeenCalledWith('https://directory.test/servers', { headers: { Accept: 'application/json' } });
   });
+
+  it('normalizes PascalCase HubServer directory responses', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(response(JSON.stringify({ DonateUrl: 'https://orion.moreno.land/donate.php', Servers: [{ Id: 'orion-go', Name: 'Orion-Go', Type: 'Gold', Description: 'Go Code GServer', Url: 'https://github.com/MorenoLand/GScript.GServerGo', Language: 'English', Version: 'Version: 0.1.262', PlayerCount: 1, Players: [{ Id: 2, Account: '(npcserver)', Nickname: 'Noobert2 (Server)', ClientType: 'NPCServer', CurrentLevel: '', X: 60, Y: 61, Alignment: 50 }], Ip: 'orion.moreno.land', Port: 14877, Latency: 2, AllowedVersions: [] }] })));
+    const result = await createServerDirectoryApi('http://orion.moreno.land:14900/servers', fetchSpy).listServers();
+    expect(result.donateUrl).toBe('https://orion.moreno.land/donate.php');
+    expect(result.servers[0]).toMatchObject({ id: 'orion-go', name: 'Orion-Go', ip: 'orion.moreno.land', port: 14877, playerCount: 1 });
+    expect(result.servers[0].players[0]).toMatchObject({ id: 2, account: '(npcserver)', nickname: 'Noobert2 (Server)' });
+  });
 });

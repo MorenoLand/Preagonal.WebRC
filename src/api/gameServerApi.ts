@@ -144,8 +144,51 @@ export class HttpServerDirectoryApi implements ServerDirectoryApi {
       throw new ApiError(response.status, body || response.statusText);
     if (!body)
       throw new Error('The server directory returned an empty response.');
-    return JSON.parse(body) as GraalServerDirectoryResponse;
+    return normalizeServerDirectoryResponse(body);
   }
+}
+
+function normalizeServerDirectoryResponse(body: string): GraalServerDirectoryResponse {
+  const payload = asRecord(JSON.parse(body), 'server directory response');
+  const rawServers = readValue(payload, 'servers', 'Servers');
+  if (!Array.isArray(rawServers)) throw new Error('The server directory response did not contain a servers array.');
+  return { status: readString(payload, 'status', 'Status'), siteUrl: readString(payload, 'siteUrl', 'SiteUrl'), donateUrl: readString(payload, 'donateUrl', 'DonateUrl'), servers: rawServers.map(normalizeGraalServer) };
+}
+
+function normalizeGraalServer(value: unknown): GraalServer {
+  const server = asRecord(value, 'server directory entry');
+  return { id: readString(server, 'id', 'Id'), name: readString(server, 'name', 'Name'), type: readString(server, 'type', 'Type'), description: readString(server, 'description', 'Description'), url: readString(server, 'url', 'Url'), language: readString(server, 'language', 'Language'), version: readString(server, 'version', 'Version'), buildDate: readString(server, 'buildDate', 'BuildDate') || undefined, playerCount: readNumber(server, 'playerCount', 'PlayerCount'), players: normalizePlayers(readValue(server, 'players', 'Players')), ip: readString(server, 'ip', 'Ip'), port: readNumber(server, 'port', 'Port'), latency: readNumber(server, 'latency', 'Latency'), allowedVersions: readStringList(readValue(server, 'allowedVersions', 'AllowedVersions')) };
+}
+
+function normalizePlayers(value: unknown): readonly GraalServerPlayer[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(entry => {
+    const player = asRecord(entry, 'server player');
+    return { id: readNumber(player, 'id', 'Id'), account: readString(player, 'account', 'Account'), nickname: readString(player, 'nickname', 'Nickname'), clientType: readString(player, 'clientType', 'ClientType'), currentLevel: readString(player, 'currentLevel', 'CurrentLevel'), x: readNumber(player, 'x', 'X'), y: readNumber(player, 'y', 'Y'), alignment: readNumber(player, 'alignment', 'Alignment') };
+  });
+}
+
+function asRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`The ${label} was not an object.`);
+  return value as Record<string, unknown>;
+}
+
+function readValue(record: Record<string, unknown>, ...keys: string[]): unknown {
+  return keys.map(key => record[key]).find(value => value !== undefined && value !== null);
+}
+
+function readString(record: Record<string, unknown>, ...keys: string[]): string {
+  const value = readValue(record, ...keys);
+  return value === undefined ? '' : String(value);
+}
+
+function readNumber(record: Record<string, unknown>, ...keys: string[]): number {
+  const value = Number(readValue(record, ...keys));
+  return Number.isFinite(value) ? value : 0;
+}
+
+function readStringList(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value.map(String) : [];
 }
 
 export function normalizeFilePath(value: string): string {
