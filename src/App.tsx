@@ -73,11 +73,20 @@ export function App() {
     void gameServerApi.login({ account, password: connection.password }).then(() => {
       setConnectionState('connected');
       setNotice({ kind: 'success', text: `Connected to ${endpoint}.` });
+      const knownServerName = connectionName || findServerName(endpoint, servers);
+      if (knownServerName) {
+        setConnectionName(knownServerName);
+        return;
+      }
+      void serverDirectoryApi.listServers().then(response => {
+        const serverName = findServerName(endpoint, response.servers);
+        if (serverName) setConnectionName(serverName);
+      }).catch(() => undefined);
     }).catch(error => {
       setConnectionState('offline');
       setNotice({ kind: 'error', text: getConnectionErrorMessage(error) });
     });
-  }, [connection.account, connection.endpoint, connection.password, gameServerApi]);
+  }, [connection.account, connection.endpoint, connection.password, connectionName, gameServerApi, serverDirectoryApi, servers]);
   const handleFetchServers = useCallback(() => {
     openFeature('servers');
     setServerDirectoryStatus('loading');
@@ -107,6 +116,19 @@ export function App() {
       <Workspace activeFeature={activeFeature} openFeatures={openFeatures} notice={notice} connectionState={connectionState} gameServerApi={gameServerApi} onSelect={openFeature} onClose={closeFeature} onAction={handleAction} servers={servers} serverDirectoryStatus={serverDirectoryStatus} serverDirectoryError={serverDirectoryError} onFetchServers={handleFetchServers} onUseServer={handleUseServer} />
     </AppShell>
   </ThemeProvider>;
+}
+
+function findServerName(endpoint: string, servers: readonly GraalServer[]): string {
+  const host = getHost(endpoint);
+  return servers.find(server => server.name && server.ip !== '$AUTO' && getHost(server.ip) === host)?.name ?? '';
+}
+
+function getHost(value: string): string {
+  try {
+    return new URL(value.includes('://') ? value : `http://${value}`).hostname.toLowerCase();
+  } catch {
+    return value.toLowerCase().split(':')[0];
+  }
 }
 
 function getConnectionErrorMessage(error: unknown): string {

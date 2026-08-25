@@ -19,7 +19,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeFeature, connection, connectionName, onSelect, onConnectionChange, onConnect, onFetchServers, fetchingServers, connectionState }: SidebarProps) {
-  const statusLabel = connectionState === 'connected' ? `Connected · ${connectionName || getEndpointLabel(connection.endpoint)}` : connectionState === 'connecting' ? 'Connecting…' : 'Not Connected';
+  const statusLabel = connectionState === 'connected' ? connectionName || getEndpointLabel(connection.endpoint) : connectionState === 'connecting' ? 'Connecting…' : 'Not Connected';
   return (
     <aside className="sidebar">
       <header className="brand-header">
