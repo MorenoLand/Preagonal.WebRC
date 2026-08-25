@@ -8,6 +8,8 @@ describe('App', () => {
     render(<App />);
     expect(screen.getByText('RC Web')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'RC Chat' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'GameServer API' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Server list API' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'RC Chat' })).not.toBeInTheDocument();
     expect(screen.getByText('No remote-control session')).toBeInTheDocument();
   });
@@ -41,7 +43,9 @@ describe('App', () => {
     await user.type(screen.getByRole('textbox', { name: 'Search servers' }), 'SharpServer');
     expect(screen.getByText('SharpServer TEST')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Use endpoint' }));
+    await user.click(screen.getByRole('button', { name: 'Configure API endpoints' }));
     expect(screen.getByRole('textbox', { name: 'GameServer API' })).toHaveValue('http://sharpserver.home.eevul.net');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
     fetchSpy.mockRestore();
   });
 
@@ -49,9 +53,12 @@ describe('App', () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ status: 'ok', siteUrl: '', donateUrl: '', servers: [{ id: 'custom-1', name: 'Custom Directory Server', type: 'Hosted', description: '', url: '', language: 'English', version: '1', playerCount: 0, players: [], ip: 'custom.test', port: 14916, latency: 0, allowedVersions: [] }] }), { headers: { 'content-type': 'application/json' } }));
     render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Configure API endpoints' }));
     const directoryInput = screen.getByRole('textbox', { name: 'Server list API' });
     await user.clear(directoryInput);
     await user.type(directoryInput, 'https://directory.test/servers/');
+    await user.click(screen.getByRole('button', { name: 'Save API endpoints' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Fetch Servers' }));
     await waitFor(() => expect(screen.getByText('Custom Directory Server')).toBeInTheDocument());
     expect(fetchSpy).toHaveBeenCalledWith('https://directory.test/servers', expect.objectContaining({ headers: { Accept: 'application/json' } }));
@@ -64,7 +71,10 @@ describe('App', () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('jwt-token', { headers: { 'content-type': 'text/plain' } })).mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', siteUrl: '', donateUrl: '', servers: [{ id: 'server-1', name: 'SharpServer TEST', type: 'Hidden', description: '', url: '', language: 'English', version: '0.0.25', playerCount: 0, players: [], ip: 'server.test', port: 14916, latency: 0, allowedVersions: [] }] }), { headers: { 'content-type': 'application/json' } }));
     render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Configure API endpoints' }));
     await user.type(screen.getByRole('textbox', { name: 'GameServer API' }), 'http://server.test');
+    await user.click(screen.getByRole('button', { name: 'Save API endpoints' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await user.type(screen.getByRole('textbox', { name: 'Account' }), 'staff');
     await user.type(screen.getByLabelText('Password'), 'secret');
     await user.click(screen.getByRole('button', { name: 'Connect' }));
@@ -75,7 +85,9 @@ describe('App', () => {
     await waitFor(() => expect(document.querySelector('.summary-status-label')).toHaveTextContent('SharpServer TEST'));
     expect(screen.queryByText('Connected · server.test')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Edit connection details' }));
+    await user.click(screen.getByRole('button', { name: 'Configure API endpoints' }));
     expect(screen.getByRole('textbox', { name: 'GameServer API' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.getByText('RC chat unavailable')).toBeInTheDocument();
     fetchSpy.mockRestore();
   });
@@ -87,7 +99,10 @@ describe('App', () => {
       { name: 'start.nw', path: 'start.nw', isDirectory: false, size: 2048, modified: '2026-08-25T12:00:00Z' }
     ]), { headers: { 'content-type': 'application/json' } }));
     render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Configure API endpoints' }));
     await user.type(screen.getByRole('textbox', { name: 'GameServer API' }), 'http://server.test');
+    await user.click(screen.getByRole('button', { name: 'Save API endpoints' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await user.type(screen.getByRole('textbox', { name: 'Account' }), 'staff');
     await user.type(screen.getByLabelText('Password'), 'secret');
     await user.click(screen.getByRole('button', { name: 'Connect' }));

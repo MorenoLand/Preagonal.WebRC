@@ -33,6 +33,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .connection-collapsed-name { display: flex; min-width: 0; align-items: center; gap: 7px; overflow: hidden; color: var(--text); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .connection-collapsed-name svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--green); }
 .connection-collapsed-endpoint { overflow: hidden; color: var(--quiet); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.connection-collapsed-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 3px; }
 .connection-expand-button { width: 30px; height: 30px; flex: 0 0 30px; color: var(--green); }
 .connection-expand-button:hover { background: rgba(99,197,139,0.12); }
 .connection-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; color: rgba(255,255,255,0.54); font-size: 8px; letter-spacing: 0.1em; }
@@ -52,7 +53,18 @@ button { -webkit-tap-highlight-color: transparent; }
 .connection-action-icon:hover { border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.08); }
 .connection-action-icon.connection-action-connect { border-color: transparent; background: var(--green); color: #07170d; }
 .connection-action-icon.connection-action-connect:hover { background: #7bd39d; }
+.connection-action-icon.connection-action-settings { background: rgba(255,255,255,0.04); }
 .connection-action-icon svg { width: 18px; height: 18px; }
+.api-settings-drawer { width: min(360px, calc(100vw - 24px)); box-sizing: border-box; padding: 18px; background: var(--panel) !important; color: var(--text); }
+.api-settings-drawer-form { display: flex; min-height: 100%; flex-direction: column; gap: 14px; }
+.api-settings-drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.api-settings-drawer-header div { display: flex; flex-direction: column; gap: 4px; }
+.api-settings-drawer-header strong { color: var(--text); font-size: 16px; }
+.api-settings-drawer-header span { color: var(--quiet); font-size: 11px; }
+.api-settings-drawer-header .MuiIconButton-root { margin: -7px -7px 0 0; color: var(--quiet); }
+.api-settings-drawer-copy { margin: 0; color: var(--quiet); font-size: 12px; line-height: 1.5; }
+.api-settings-drawer .rc-text-field .MuiOutlinedInput-root { background: rgba(0,0,0,0.22); color: var(--text); }
+.api-settings-drawer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 18px; }
 .rc-button { min-height: 34px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
 .rc-button-primary { background: var(--green); color: #07170d; }
 .rc-button-primary:hover { background: #7bd39d; }
