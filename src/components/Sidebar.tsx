@@ -3,7 +3,7 @@ import type { SvgIconProps } from '@mui/material/SvgIcon';
 import Tooltip from '@mui/material/Tooltip';
 import rcIcon from '../../images/rcicon.png';
 import { navigationGroups, type NavigationGroup } from '../navigation';
-import type { ConnectionForm, FeatureId } from '../types';
+import type { ConnectionForm, ConnectionState, FeatureId } from '../types';
 import { ConnectionPanel } from './ConnectionPanel';
 
 interface SidebarProps {
@@ -13,9 +13,12 @@ interface SidebarProps {
   onConnectionChange: (value: ConnectionForm) => void;
   onConnect: () => void;
   onFetchServers: () => void;
+  fetchingServers: boolean;
+  connectionState: ConnectionState;
 }
 
-export function Sidebar({ activeFeature, connection, onSelect, onConnectionChange, onConnect, onFetchServers }: SidebarProps) {
+export function Sidebar({ activeFeature, connection, onSelect, onConnectionChange, onConnect, onFetchServers, fetchingServers, connectionState }: SidebarProps) {
+  const statusLabel = connectionState === 'connected' ? 'Connected' : connectionState === 'connecting' ? 'Connecting…' : 'Not Connected';
   return (
     <aside className="sidebar">
       <header className="brand-header">
@@ -23,13 +26,13 @@ export function Sidebar({ activeFeature, connection, onSelect, onConnectionChang
         <div className="brand-copy"><strong>RC Web</strong><span>PREAGONAL CONTROL</span></div>
       </header>
       <div className="server-summary">
-        <div className="summary-status"><span className="status-indicator" />Not Connected</div>
+        <div className="summary-status"><span className={`status-indicator status-${connectionState}`} />{statusLabel}</div>
         <span className="summary-count">0 online</span>
       </div>
       <nav className="sidebar-navigation" aria-label="Remote control navigation">
         {navigationGroups.map(group => <NavigationSection key={group.label} group={group} activeFeature={activeFeature} onSelect={onSelect} />)}
       </nav>
-      <ConnectionPanel value={connection} onChange={onConnectionChange} onConnect={onConnect} onFetchServers={onFetchServers} />
+      <ConnectionPanel value={connection} onChange={onConnectionChange} onConnect={onConnect} onFetchServers={onFetchServers} fetchingServers={fetchingServers} connecting={connectionState === 'connecting'} />
     </aside>
   );
 }

@@ -10,9 +10,10 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import IconButton from '@mui/material/IconButton';
 import { navigationById, type NavigationItem } from '../navigation';
-import type { ApiFileEntry } from '../api/gameServerApi';
-import type { ActionNotice, FeatureId } from '../types';
+import type { ApiFileEntry, GraalServer } from '../api/gameServerApi';
+import type { ActionNotice, ConnectionState, FeatureId, ServerDirectoryStatus } from '../types';
 import { DataTable, FeaturePanel, ToolRow } from './FeaturePanel';
 import { EmptyState } from './EmptyState';
 
@@ -22,25 +23,26 @@ interface WorkspaceProps {
   activeFeature: FeatureId;
   openFeatures: FeatureId[];
   notice: ActionNotice | null;
+  connectionState: ConnectionState;
   onSelect: (feature: FeatureId) => void;
   onClose: (feature: FeatureId) => void;
   onAction: (feature: FeatureId, operation: string) => void;
+  servers: readonly GraalServer[];
+  serverDirectoryStatus: ServerDirectoryStatus;
+  serverDirectoryError: string | null;
+  onFetchServers: () => void;
+  onUseServer: (server: GraalServer) => void;
 }
 
-export function Workspace({ activeFeature, openFeatures, notice, onSelect, onClose, onAction }: WorkspaceProps) {
+export function Workspace({ activeFeature, openFeatures, notice, connectionState, onSelect, onClose, onAction, servers, serverDirectoryStatus, serverDirectoryError, onFetchServers, onUseServer }: WorkspaceProps) {
   const item = navigationById[activeFeature];
   return (
     <main className="workspace">
-      <header className="workspace-topbar">
-        <div className="workspace-location"><span>RC WEB</span><span className="location-separator">/</span><strong>{item.label}</strong></div>
-        <div className="workspace-health"><span className="status-indicator" />API adapter ready<span className="health-divider" />Integration pending</div>
-      </header>
       <div className="workspace-content">
         <TabBar activeFeature={activeFeature} openFeatures={openFeatures} onSelect={onSelect} onClose={onClose} />
         {notice && <div className={`notice notice-${notice.kind}`} role="status"><InfoOutlinedIcon /><span>{notice.text}</span></div>}
-        <FeatureContent item={item} onAction={onAction} />
+        <FeatureContent item={item} connectionState={connectionState} onAction={onAction} servers={servers} serverDirectoryStatus={serverDirectoryStatus} serverDirectoryError={serverDirectoryError} onFetchServers={onFetchServers} onUseServer={onUseServer} />
       </div>
-      <footer className="workspace-footer"><span>PREAGONAL / RC WEB</span><span>v0.1 skeleton</span></footer>
     </main>
   );
 }
@@ -69,14 +71,20 @@ function TabBar({ activeFeature, openFeatures, onSelect, onClose }: TabBarProps)
 
 interface FeatureContentProps {
   item: NavigationItem;
+  connectionState: ConnectionState;
   onAction: (feature: FeatureId, operation: string) => void;
+  servers: readonly GraalServer[];
+  serverDirectoryStatus: ServerDirectoryStatus;
+  serverDirectoryError: string | null;
+  onFetchServers: () => void;
+  onUseServer: (server: GraalServer) => void;
 }
 
-function FeatureContent({ item, onAction }: FeatureContentProps) {
+function FeatureContent({ item, connectionState, onAction, servers, serverDirectoryStatus, serverDirectoryError, onFetchServers, onUseServer }: FeatureContentProps) {
   switch (item.id) {
-    case 'chat': return <ChatPanel item={item} onAction={onAction} />;
+    case 'chat': return <ChatPanel item={item} connectionState={connectionState} onAction={onAction} />;
     case 'players': return <PlayersPanel item={item} onAction={onAction} />;
-    case 'servers': return <ServersPanel item={item} onAction={onAction} />;
+    case 'servers': return <ServersPanel item={item} servers={servers} status={serverDirectoryStatus} error={serverDirectoryError} onFetchServers={onFetchServers} onUseServer={onUseServer} />;
     case 'files': return <FileBrowserPanel item={item} onAction={onAction} />;
     case 'server-options': return <EditorPanel item={item} operation="read server options" onAction={onAction} />;
     case 'folder-config': return <EditorPanel item={item} operation="read folder config" onAction={onAction} />;
@@ -93,23 +101,22 @@ interface PanelFeatureProps {
   onAction: (feature: FeatureId, operation: string) => void;
 }
 
-function ChatPanel({ item, onAction }: PanelFeatureProps) {
+function ChatPanel({ item, connectionState, onAction }: PanelFeatureProps & { connectionState: ConnectionState }) {
   const [message, setMessage] = useState('');
+  const connected = connectionState === 'connected';
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!message.trim()) return;
     onAction(item.id, 'send chat message');
     setMessage('');
   };
-  return <FeaturePanel title={item.label} description={item.description} icon={item.icon}>
-    <div className="chat-surface">
-      <EmptyState title="No remote-control session" description="Connect to a GameServer API to receive chat output and issue RC commands." icon={item.icon} />
-      <form className="chat-composer" onSubmit={submit}>
-        <TextField className="rc-text-field" label="Command or message" placeholder="Type a command…" value={message} onChange={(event: ChangeEvent<HTMLInputElement>) => setMessage(event.target.value)} fullWidth />
-        <Button className="rc-button rc-button-primary" type="submit" disabled={!message.trim()}>Send</Button>
-      </form>
-    </div>
-  </FeaturePanel>;
+  return <div className="chat-surface">
+    <EmptyState title={connected ? 'RC chat unavailable' : 'No remote-control session'} description={connected ? 'GameServer API login succeeded, but the current API contract does not expose an RC chat transport.' : 'Connect to a GameServer API to receive chat output and issue RC commands.'} icon={item.icon} />
+    <form className="chat-composer" onSubmit={submit}>
+      <TextField className="rc-text-field" label="Command or message" placeholder="Type a command…" value={message} onChange={(event: ChangeEvent<HTMLInputElement>) => setMessage(event.target.value)} fullWidth />
+      <Button className="rc-button rc-button-primary" type="submit" disabled={!message.trim()}>Send</Button>
+    </form>
+  </div>;
 }
 
 function PlayersPanel({ item, onAction }: PanelFeatureProps) {
@@ -122,11 +129,69 @@ function PlayersPanel({ item, onAction }: PanelFeatureProps) {
   </FeaturePanel>;
 }
 
-function ServersPanel({ item, onAction }: PanelFeatureProps) {
-  return <FeaturePanel title={item.label} description={item.description} icon={item.icon}>
-    <div className="feature-toolbar"><Button className="rc-button rc-button-muted" onClick={() => onAction(item.id, 'fetch servers')} startIcon={<RefreshIcon />}>Fetch server list</Button></div>
-    <EmptyState title="No server selected" description="The server list is intentionally empty until the API adapter is enabled." icon={item.icon} />
-  </FeaturePanel>;
+interface ServersPanelProps {
+  item: NavigationItem;
+  servers: readonly GraalServer[];
+  status: ServerDirectoryStatus;
+  error: string | null;
+  onFetchServers: () => void;
+  onUseServer: (server: GraalServer) => void;
+}
+
+function ServersPanel({ item, servers, status, error, onFetchServers, onUseServer }: ServersPanelProps) {
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<{ key: ServerSortKey; direction: SortDirection }>({ key: 'name', direction: 'asc' });
+  const filteredServers = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return servers;
+    return servers.filter(server => [server.name, server.ip, server.type, server.version].some(value => value.toLowerCase().includes(normalizedQuery)));
+  }, [query, servers]);
+  const sortedServers = useMemo(() => [...filteredServers].sort((left, right) => compareServers(left, right, sort)), [filteredServers, sort]);
+  const handleSort = (key: string) => {
+    if (!isServerSortKey(key)) return;
+    setSort(current => current.key === key ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' });
+  };
+  const rows = sortedServers.map(server => {
+    const endpoint = getServerEndpoint(server);
+    return <tr key={server.id}>
+      <td><div className="server-name-cell"><strong>{server.name}</strong><span>{server.type} · {server.version}</span></div></td>
+      <td>{server.ip}:{server.port}</td>
+      <td>{server.playerCount}</td>
+      <td>{server.latency} ms</td>
+      <td><Button className="rc-button rc-button-muted" size="small" disabled={!endpoint} onClick={() => onUseServer(server)}>Use endpoint</Button></td>
+    </tr>;
+  });
+  return <section className="feature-panel servers-panel">
+    <div className="feature-panel-body">
+      {status === 'loading' && <EmptyState title="Loading server list" description="Polling api.graalserver.com for online servers." icon={item.icon} />}
+      {status === 'error' && <EmptyState title="Unable to load servers" description={error ?? 'The public server directory could not be read.'} icon={item.icon} action={<Button className="rc-button rc-button-muted" onClick={onFetchServers}>Try again</Button>} />}
+      {status !== 'loading' && status !== 'error' && servers.length === 0 && <EmptyState title="No servers loaded" description="Fetch the public server directory to see available IPs and ports." icon={item.icon} />}
+      {status === 'ready' && servers.length > 0 && <>
+        <ToolRow>
+          <TextField className="rc-text-field compact-field" label="Search servers" placeholder="Name or address" value={query} onChange={event => setQuery(event.target.value)} InputProps={{ startAdornment: <SearchIcon className="field-icon" /> }} />
+        </ToolRow>
+        <DataTable columns={[{ label: 'Server', sortKey: 'name' }, { label: 'Address', sortKey: 'address' }, { label: 'Players', sortKey: 'players' }, { label: 'Latency', sortKey: 'latency' }, { label: '', headerAction: <IconButton className="server-refresh-button" onClick={onFetchServers} aria-label="Refresh server list" title="Refresh server list"><RefreshIcon /></IconButton> }]} sortKey={sort.key} sortDirection={sort.direction} onSort={handleSort} emptyTitle={query ? 'No matching servers' : 'No servers loaded'} emptyDescription={query ? 'Try a different name or address.' : 'The public server directory returned no rows.'}>{rows.length > 0 ? rows : undefined}</DataTable>
+      </>}
+    </div>
+  </section>;
+}
+
+type ServerSortKey = 'name' | 'address' | 'players' | 'latency';
+type SortDirection = 'asc' | 'desc';
+
+function isServerSortKey(value: string): value is ServerSortKey {
+  return value === 'name' || value === 'address' || value === 'players' || value === 'latency';
+}
+
+function compareServers(left: GraalServer, right: GraalServer, sort: { key: ServerSortKey; direction: SortDirection }): number {
+  const leftValue = sort.key === 'players' ? left.playerCount : sort.key === 'latency' ? left.latency : sort.key === 'address' ? `${left.ip}:${left.port}` : left.name;
+  const rightValue = sort.key === 'players' ? right.playerCount : sort.key === 'latency' ? right.latency : sort.key === 'address' ? `${right.ip}:${right.port}` : right.name;
+  const result = typeof leftValue === 'number' && typeof rightValue === 'number' ? leftValue - rightValue : String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: 'base' });
+  return (result || left.id.localeCompare(right.id)) * (sort.direction === 'asc' ? 1 : -1);
+}
+
+function getServerEndpoint(server: GraalServer): string | null {
+  return server.ip && server.ip !== '$AUTO' ? `http://${server.ip}` : null;
 }
 
 function FileBrowserPanel({ item, onAction }: PanelFeatureProps) {
@@ -157,7 +222,6 @@ function EditorPanel({ item, operation, onAction }: EditorPanelProps) {
       <Button className="rc-button rc-button-muted" onClick={() => onAction(item.id, operation)} startIcon={<RefreshIcon />}>Read source</Button>
       <Button className="rc-button rc-button-primary" onClick={() => onAction(item.id, `update ${item.label.toLowerCase()}`)} startIcon={<CodeIcon />}>Save changes</Button>
     </>}>
-      <span className="tool-label">SOURCE EDITOR</span>
     </ToolRow>
     <TextField className="rc-editor" multiline minRows={15} value={source} onChange={event => setSource(event.target.value)} placeholder="Source will appear here when this API surface is available." fullWidth />
     <div className="editor-footer"><span>UTF-8</span><span>{source.length} characters</span></div>
@@ -171,11 +235,12 @@ interface CatalogPanelProps extends PanelFeatureProps {
 function CatalogPanel({ item, noun, onAction }: CatalogPanelProps) {
   const [query, setQuery] = useState('');
   const title = noun === 'NPC' ? 'NPC' : noun.charAt(0).toUpperCase() + noun.slice(1);
+  const plural = noun === 'class' ? 'classes' : `${noun}s`;
   return <FeaturePanel title={item.label} description={item.description} icon={item.icon}>
     <ToolRow end={<Button className="rc-button rc-button-primary" onClick={() => onAction(item.id, `create ${noun}`)} startIcon={<AddIcon />}>Add {title}</Button>}>
-      <TextField className="rc-text-field compact-field" label={`Search ${noun}s`} placeholder={`Name or ${noun} ID`} value={query} onChange={event => setQuery(event.target.value)} InputProps={{ startAdornment: <SearchIcon className="field-icon" /> }} />
+      <TextField className="rc-text-field compact-field" label={`Search ${plural}`} placeholder={`Name or ${noun} ID`} value={query} onChange={event => setQuery(event.target.value)} InputProps={{ startAdornment: <SearchIcon className="field-icon" /> }} />
     </ToolRow>
-    <DataTable columns={noun === 'NPC' ? ['Name', 'Type', 'Level', 'ID', ''] : ['Name', 'Source', 'Updated', '']} emptyTitle={query ? `No matching ${noun}s` : `No ${noun}s loaded`} emptyDescription={`The ${noun} API is not exposed yet; this panel is ready for its typed adapter methods.`} />
+    <DataTable columns={noun === 'NPC' ? ['Name', 'Type', 'Level', 'ID', ''] : ['Name', 'Source', 'Updated', '']} emptyTitle={query ? `No matching ${plural}` : `No ${plural} loaded`} emptyDescription={`The ${noun} API is not exposed yet; this panel is ready for its typed adapter methods.`} />
     {query.length > 0 && <div className="search-note">Filtering is local to the current empty result set.</div>}
   </FeaturePanel>;
 }

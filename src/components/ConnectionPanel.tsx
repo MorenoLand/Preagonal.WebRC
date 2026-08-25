@@ -10,9 +10,11 @@ interface ConnectionPanelProps {
   onChange: (value: ConnectionForm) => void;
   onConnect: () => void;
   onFetchServers: () => void;
+  fetchingServers?: boolean;
+  connecting?: boolean;
 }
 
-export function ConnectionPanel({ value, onChange, onConnect, onFetchServers }: ConnectionPanelProps) {
+export function ConnectionPanel({ value, onChange, onConnect, onFetchServers, fetchingServers = false, connecting = false }: ConnectionPanelProps) {
   const update = (field: keyof ConnectionForm) => (event: ChangeEvent<HTMLInputElement>) => onChange({ ...value, [field]: event.target.value });
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); onConnect(); };
   return (
@@ -23,8 +25,8 @@ export function ConnectionPanel({ value, onChange, onConnect, onFetchServers }: 
       <TextField className="rc-text-field" label="Account" value={value.account} onChange={update('account')} autoComplete="username" fullWidth />
       <TextField className="rc-text-field" label="Password" type="password" value={value.password} onChange={update('password')} autoComplete="current-password" fullWidth />
       <div className="connection-actions">
-        <Button className="rc-button rc-button-muted" type="button" onClick={onFetchServers} startIcon={<DownloadIcon />}>Fetch Servers</Button>
-        <Button className="rc-button rc-button-primary" type="submit" endIcon={<ArrowForwardIcon />}>Connect</Button>
+        <Button className="rc-button rc-button-muted" type="button" onClick={onFetchServers} disabled={fetchingServers} startIcon={<DownloadIcon />}>{fetchingServers ? 'Fetching…' : 'Fetch Servers'}</Button>
+        <Button className="rc-button rc-button-primary" type="submit" disabled={connecting} endIcon={<ArrowForwardIcon />}>{connecting ? 'Connecting…' : 'Connect'}</Button>
       </div>
     </form>
   );

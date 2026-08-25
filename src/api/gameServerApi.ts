@@ -1,3 +1,6 @@
+import { ApiException as GeneratedApiException, GameServerClient, LoginRequest as GeneratedLoginRequest } from './generated/gameServerClient';
+import type { FileParameter } from './generated/gameServerClient';
+
 export interface LoginRequest {
   account: string;
   password: string;
@@ -11,9 +14,47 @@ export interface ApiFileEntry {
   modified?: string | null;
 }
 
-export interface ServerStats {
-  levels: number;
-  players: number;
+export type ServerStats = Awaited<ReturnType<GameServerClient['stats']>>;
+
+export interface GraalServerPlayer {
+  id: number;
+  account: string;
+  nickname: string;
+  clientType: string;
+  currentLevel: string;
+  x: number;
+  y: number;
+  alignment: number;
+}
+
+export interface GraalServer {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  url: string;
+  language: string;
+  version: string;
+  buildDate?: string;
+  playerCount: number;
+  players: readonly GraalServerPlayer[];
+  ip: string;
+  port: number;
+  latency: number;
+  allowedVersions: readonly string[];
+}
+
+export interface GraalServerDirectoryResponse {
+  status: string;
+  siteUrl: string;
+  donateUrl: string;
+  servers: readonly GraalServer[];
+}
+
+export const GRAAL_SERVER_DIRECTORY_URL = 'https://api.graalserver.com/servers';
+
+export interface ServerDirectoryApi {
+  listServers(): Promise<GraalServerDirectoryResponse>;
 }
 
 export interface FileWriteOptions {
@@ -67,7 +108,27 @@ export class ApiNotImplementedError extends Error {
 }
 
 export function normalizeApiBaseUrl(value: string): string {
-  return value.trim().replace(/\/+$/, '');
+  const trimmed = value.trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  try {
+    return new URL(trimmed).toString().replace(/\/+$/, '');
+  } catch {
+    return trimmed;
+  }
+}
+
+export class HttpServerDirectoryApi implements ServerDirectoryApi {
+  constructor(private readonly fetchImpl: FetchLike = browserFetch) {}
+
+  async listServers(): Promise<GraalServerDirectoryResponse> {
+    const response = await this.fetchImpl(GRAAL_SERVER_DIRECTORY_URL, { headers: { Accept: 'application/json' } });
+    const body = await response.text();
+    if (!response.ok)
+      throw new ApiError(response.status, body || response.statusText);
+    if (!body)
+      throw new Error('The server directory returned an empty response.');
+    return JSON.parse(body) as GraalServerDirectoryResponse;
+  }
 }
 
 export function normalizeFilePath(value: string): string {
@@ -77,65 +138,66 @@ export function normalizeFilePath(value: string): string {
   return normalized;
 }
 
-function encodeFilePath(path: string): string {
-  return normalizeFilePath(path).split('/').map(segment => encodeURIComponent(segment)).join('/');
-}
-
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+const browserFetch: FetchLike = (input, init) => globalThis.fetch(input, init);
+
+function emptyMultipartFile(): FileParameter {
+  return { data: new Blob(), fileName: 'file' };
+}
 
 export class HttpGameServerApi implements GameServerApi {
   private token: string | null = null;
+  private readonly client: GameServerClient;
 
-  constructor(private readonly baseUrl: string, private readonly fetchImpl: FetchLike = fetch) {}
+  constructor(baseUrl: string, private readonly fetchImpl: FetchLike = browserFetch) {
+    this.client = new GameServerClient(normalizeApiBaseUrl(baseUrl), { fetch: (input, init) => this.fetchWithAuth(input, init) });
+  }
 
   setToken(token: string | null): void {
     this.token = token;
   }
 
   async login(request: LoginRequest): Promise<string> {
-    const token = await this.request<string>('/api/v1/login', { method: 'POST', body: JSON.stringify({ Account: request.account, Password: request.password }) });
+    this.token = null;
+    const token = await this.run(() => this.client.login(new GeneratedLoginRequest({ account: request.account, password: request.password })));
     this.token = token;
     return token;
   }
 
   getStats(): Promise<ServerStats> {
-    return this.request<ServerStats>('/api/v1/stats');
+    return this.run(() => this.client.stats());
   }
 
-  listFiles(path = ''): Promise<readonly ApiFileEntry[]> {
+  async listFiles(path = ''): Promise<readonly ApiFileEntry[]> {
     const normalized = normalizeFilePath(path);
-    return this.request<readonly ApiFileEntry[]>(normalized ? `/api/v1/files/${encodeFilePath(normalized)}` : '/api/v1/files');
+    const entries = await this.run(() => normalized ? this.client.filesAll2(normalized) : this.client.filesAll());
+    return entries.map(entry => ({ name: entry.name ?? '', path: entry.path ?? '', isDirectory: entry.isDirectory ?? false, size: entry.size, modified: entry.modified?.toISOString() ?? null }));
   }
 
   putFile(path: string, file?: File, options: FileWriteOptions = {}): Promise<void> {
-    const form = new FormData();
-    if (!options.directory && file)
-      form.append('file', file, file.name);
-    const query = new URLSearchParams();
-    if (options.directory)
-      query.set('directory', 'true');
-    if (options.overwrite)
-      query.set('overwrite', 'true');
-    const suffix = query.size > 0 ? `?${query.toString()}` : '';
-    return this.request<void>(`/api/v1/files/${encodeFilePath(path)}${suffix}`, { method: 'PUT', body: form });
+    const normalized = normalizeFilePath(path);
+    const parameter: FileParameter | undefined = file ? { data: file, fileName: file.name } : options.directory ? emptyMultipartFile() : undefined;
+    return this.run(() => normalized ? this.client.filesPUT2(normalized, options.directory, options.overwrite, parameter) : this.client.filesPUT(options.directory, options.overwrite, parameter));
   }
 
   renameFile(path: string, destination: string): Promise<void> {
-    const form = new FormData();
-    const query = new URLSearchParams({ destination: normalizeFilePath(destination) });
-    return this.request<void>(`/api/v1/files/${encodeFilePath(path)}?${query.toString()}`, { method: 'POST', body: form });
+    const normalized = normalizeFilePath(path);
+    const target = normalizeFilePath(destination);
+    const parameter = emptyMultipartFile();
+    return this.run(() => normalized ? this.client.filesPOST2(normalized, target, parameter) : this.client.filesPOST(target, parameter));
   }
 
   deleteFile(path: string): Promise<void> {
-    return this.request<void>(`/api/v1/files/${encodeFilePath(path)}`, { method: 'DELETE' });
+    const normalized = normalizeFilePath(path);
+    return this.run(() => normalized ? this.client.filesDELETE2(normalized) : this.client.filesDELETE());
   }
 
   getScriptDefinitions(): Promise<unknown> {
-    return this.request<unknown>('/api/v1/scripts/definitions');
+    return this.run(() => this.client.definitions());
   }
 
   getScriptStats(): Promise<unknown> {
-    return this.request<unknown>('/api/v1/scripts/stats');
+    return this.run(() => this.client.statsAll());
   }
 
   listPlayers(): Promise<never> { return this.unsupported('players', 'list'); }
@@ -163,26 +225,25 @@ export class HttpGameServerApi implements GameServerApi {
     return Promise.reject(new ApiNotImplementedError(feature, operation));
   }
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const headers = new Headers(init.headers);
-    headers.set('Accept', 'application/json');
+  private fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const headers = new Headers(init?.headers);
     if (this.token)
       headers.set('Authorization', `Bearer ${this.token}`);
-    if (init.body && !(init.body instanceof FormData))
-      headers.set('Content-Type', 'application/json');
-    const response = await this.fetchImpl(`${normalizeApiBaseUrl(this.baseUrl)}${path}`, { ...init, headers });
-    const body = await response.text();
-    if (!response.ok)
-      throw new ApiError(response.status, body || response.statusText);
-    if (response.status === 204 || body.length === 0)
-      return undefined as T;
-    const contentType = response.headers.get('content-type') ?? '';
-    return contentType.includes('json') ? JSON.parse(body) as T : body as T;
+    return this.fetchImpl(input, { ...init, headers });
+  }
+
+  private async run<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (GeneratedApiException.isApiException(error))
+        throw new ApiError(error.status, error.response || error.message);
+      throw error;
+    }
   }
 }
 
-export class PlaceholderGameServerApi implements GameServerApi {
-  async login(_request: LoginRequest): Promise<string> { return this.run('authentication', 'login'); }
+export class PlaceholderGameServerApi {
   async getStats(): Promise<ServerStats> { return this.run('server stats', 'read'); }
   async listFiles(_path = ''): Promise<readonly ApiFileEntry[]> { return this.run('file browser', 'list'); }
   async putFile(_path: string, _file?: File, _options?: FileWriteOptions): Promise<void> { return this.run('file browser', 'write'); }
@@ -222,4 +283,8 @@ export function createPlaceholderApi(): PlaceholderGameServerApi {
 
 export function createHttpGameServerApi(baseUrl: string, fetchImpl?: FetchLike): HttpGameServerApi {
   return new HttpGameServerApi(baseUrl, fetchImpl);
+}
+
+export function createServerDirectoryApi(fetchImpl?: FetchLike): HttpServerDirectoryApi {
+  return new HttpServerDirectoryApi(fetchImpl);
 }

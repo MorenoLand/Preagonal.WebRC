@@ -8,7 +8,9 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate-api-client": "npx nswag run nswag.json",
+    "postgenerate-api-client": "node scripts/prepare-generated-api.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -27,6 +29,7 @@
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react-swc": "^4.0.0",
     "jsdom": "^26.1.0",
+    "nswag": "^14.6.3",
     "typescript": "^5.9.2",
     "vite": "^7.1.3",
     "vitest": "^3.2.4"
