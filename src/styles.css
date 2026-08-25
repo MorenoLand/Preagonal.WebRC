@@ -78,7 +78,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .chat-composer .rc-text-field { flex: 1; }
 .chat-composer .rc-button { min-width: 78px; }
 .tool-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 42px; }
-.feature-panel-body > .tool-row:first-child { padding: 10px 12px 0; }
+.feature-panel-body > .tool-row:first-child { padding: 10px 12px 8px; }
 .tool-row-main { min-width: 0; flex: 1; }
 .tool-row-end { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .compact-field { max-width: 360px; }
