@@ -52,7 +52,7 @@ export function ConnectionPanel({ value, onChange, onConnect, onFetchServers, fe
   </div>;
   return (
     <form className="connection-panel" onSubmit={submit}>
-      <div className="connection-heading"><span>CONNECTION</span><span className="connection-dot" /></div>
+      <div className="connection-heading"><span>CONNECTION</span>{connectionName && <span className="connection-selected-name" title={connectionName}>{connectionName}</span>}<span className="connection-dot" /></div>
       <TextField className="rc-text-field" label="Nickname" placeholder="Remote control name" value={value.nickname} onChange={update('nickname')} autoComplete="nickname" fullWidth />
       <TextField className="rc-text-field" label="Account" value={value.account} onChange={update('account')} autoComplete="username" fullWidth />
       <TextField className="rc-text-field" label="Password" type="password" value={value.password} onChange={update('password')} autoComplete="current-password" fullWidth />

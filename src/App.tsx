@@ -132,7 +132,7 @@ export function App() {
     setConnectionName(server.name);
     setConnection(current => ({ ...current, endpoint }));
     setConnectionState('offline');
-    setNotice({ kind: 'success', text: `${server.name} endpoint selected.` });
+    setNotice({ kind: 'success', text: `${server.name} selected.` });
   }, []);
 
   return <ThemeProvider theme={appTheme}>

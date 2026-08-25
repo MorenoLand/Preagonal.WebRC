@@ -37,6 +37,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .connection-expand-button { width: 30px; height: 30px; flex: 0 0 30px; color: var(--green); }
 .connection-expand-button:hover { background: rgba(99,197,139,0.12); }
 .connection-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; color: rgba(255,255,255,0.54); font-size: 8px; letter-spacing: 0.1em; }
+.connection-selected-name { min-width: 0; margin-left: auto; margin-right: 7px; overflow: hidden; color: var(--green); font-size: 9px; letter-spacing: normal; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
 .connection-heading .connection-dot { width: 5px; height: 5px; box-shadow: none; opacity: 0.75; }
 .rc-text-field .MuiOutlinedInput-root { min-height: 36px; background: rgba(0,0,0,0.22); color: var(--text); font-size: 12px; }
 .rc-text-field .MuiOutlinedInput-root fieldset { border-color: rgba(255,255,255,0.15); }

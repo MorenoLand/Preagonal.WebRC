@@ -42,7 +42,9 @@ describe('App', () => {
     expect(fetchSpy).toHaveBeenCalledWith('https://api.graalserver.com/servers', expect.objectContaining({ headers: { Accept: 'application/json' } }));
     await user.type(screen.getByRole('textbox', { name: 'Search servers' }), 'SharpServer');
     expect(screen.getByText('SharpServer TEST')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Use endpoint' }));
+    await user.click(screen.getByRole('button', { name: 'Select' }));
+    expect(screen.getByText('SharpServer TEST', { selector: '.connection-selected-name' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('SharpServer TEST selected.');
     await user.click(screen.getByRole('button', { name: 'Configure API endpoints' }));
     expect(screen.getByRole('textbox', { name: 'GameServer API' })).toHaveValue('http://sharpserver.home.eevul.net');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));

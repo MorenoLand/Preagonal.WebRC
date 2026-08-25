@@ -167,7 +167,7 @@ function ServersPanel({ item, servers, status, error, onFetchServers, onUseServe
       <td>{server.ip}:{server.port}</td>
       <td>{server.playerCount}</td>
       <td>{server.latency} ms</td>
-      <td><Button className="rc-button rc-button-muted" size="small" disabled={!endpoint} onClick={() => onUseServer(server)}>Use endpoint</Button></td>
+      <td><Button className="rc-button rc-button-muted" size="small" disabled={!endpoint} onClick={() => onUseServer(server)}>Select</Button></td>
     </tr>;
   });
   return <section className="feature-panel servers-panel">
