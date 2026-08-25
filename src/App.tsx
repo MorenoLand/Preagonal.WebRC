@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { ApiError, ApiNotImplementedError, createHttpGameServerApi, createPlaceholderApi, createServerDirectoryApi, normalizeApiBaseUrl, type GameServerApi, type GraalServer } from './api/gameServerApi';
+import { ApiError, ApiNotImplementedError, createHttpGameServerApi, createPlaceholderApi, createServerDirectoryApi, normalizeApiBaseUrl, type GraalServer } from './api/gameServerApi';
 import { AppShell } from './components/AppShell';
 import { Sidebar } from './components/Sidebar';
 import { Workspace } from './components/Workspace';
@@ -16,6 +16,7 @@ export function App() {
   const [activeFeature, setActiveFeature] = useState<FeatureId>('chat');
   const [openFeatures, setOpenFeatures] = useState<FeatureId[]>(['chat']);
   const [connection, setConnection] = useState<ConnectionForm>(initialConnection);
+  const [connectionName, setConnectionName] = useState('');
   const [connectionState, setConnectionState] = useState<ConnectionState>('offline');
   const [notice, setNotice] = useState<ActionNotice | null>(null);
   const [servers, setServers] = useState<readonly GraalServer[]>([]);
@@ -55,6 +56,7 @@ export function App() {
       setConnectionState('offline');
       setNotice(null);
     }
+    if (value.endpoint.trim() !== connection.endpoint.trim()) setConnectionName('');
     setConnection(value);
   }, [connection.account, connection.endpoint, connection.password]);
   const handleConnect = useCallback(() => {
@@ -93,6 +95,7 @@ export function App() {
   const handleUseServer = useCallback((server: GraalServer) => {
     if (!server.ip || server.ip === '$AUTO') return;
     const endpoint = normalizeApiBaseUrl(`http://${server.ip}`);
+    setConnectionName(server.name);
     setConnection(current => ({ ...current, endpoint }));
     setConnectionState('offline');
     setNotice({ kind: 'success', text: `${server.name} endpoint selected.` });
@@ -100,8 +103,8 @@ export function App() {
 
   return <ThemeProvider theme={appTheme}>
     <CssBaseline />
-    <AppShell sidebar={<Sidebar activeFeature={activeFeature} connection={connection} onSelect={openFeature} onConnectionChange={handleConnectionChange} onConnect={handleConnect} onFetchServers={handleFetchServers} fetchingServers={serverDirectoryStatus === 'loading'} connectionState={connectionState} />}>
-      <Workspace activeFeature={activeFeature} openFeatures={openFeatures} notice={notice} connectionState={connectionState} gameServerApi={gameServerApi as GameServerApi | null} onSelect={openFeature} onClose={closeFeature} onAction={handleAction} servers={servers} serverDirectoryStatus={serverDirectoryStatus} serverDirectoryError={serverDirectoryError} onFetchServers={handleFetchServers} onUseServer={handleUseServer} />
+    <AppShell sidebar={<Sidebar activeFeature={activeFeature} connection={connection} connectionName={connectionName} onSelect={openFeature} onConnectionChange={handleConnectionChange} onConnect={handleConnect} onFetchServers={handleFetchServers} fetchingServers={serverDirectoryStatus === 'loading'} connectionState={connectionState} />}>
+      <Workspace activeFeature={activeFeature} openFeatures={openFeatures} notice={notice} connectionState={connectionState} gameServerApi={gameServerApi} onSelect={openFeature} onClose={closeFeature} onAction={handleAction} servers={servers} serverDirectoryStatus={serverDirectoryStatus} serverDirectoryError={serverDirectoryError} onFetchServers={handleFetchServers} onUseServer={handleUseServer} />
     </AppShell>
   </ThemeProvider>;
 }

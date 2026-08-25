@@ -7,10 +7,17 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CodeIcon from '@mui/icons-material/Code';
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import IconButton from '@mui/material/IconButton';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
 import { navigationById, type NavigationItem } from '../navigation';
 import { ApiError, type ApiFileEntry, type GameServerApi, type GraalServer } from '../api/gameServerApi';
 import type { ActionNotice, ConnectionState, FeatureId, ServerDirectoryStatus } from '../types';
@@ -205,6 +212,13 @@ function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: Fi
   const [entries, setEntries] = useState<readonly ApiFileEntry[]>([]);
   const [status, setStatus] = useState<FileBrowserStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [selectedEntryPath, setSelectedEntryPath] = useState<string | null>(null);
+  const [menu, setMenu] = useState<FileMenuState | null>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const canBrowse = connectionState === 'connected' && gameServerApi !== null;
   const loadFiles = useCallback(() => {
     if (!canBrowse || !gameServerApi) return;
@@ -216,7 +230,7 @@ function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: Fi
     }).catch(reason => {
       setEntries([]);
       setStatus('error');
-      setError(getFileListingError(reason));
+      setError(getFileOperationError(reason, 'File listing'));
     });
   }, [canBrowse, gameServerApi, path]);
   useEffect(() => {
@@ -229,9 +243,66 @@ function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: Fi
     loadFiles();
   }, [canBrowse, loadFiles]);
   const visibleEntries = useMemo(() => entries.filter(entry => entry.name.toLowerCase().includes(query.toLowerCase()) || entry.path.toLowerCase().includes(query.toLowerCase())), [entries, query]);
+  const selectedEntry = selectedEntryPath ? entries.find(entry => getFileEntryPath(path, entry) === selectedEntryPath) ?? null : null;
+  const selectedTargetPath = selectedEntry ? getFileEntryPath(path, selectedEntry) : null;
+  const closeMenu = () => setMenu(null);
+  const openEntryMenu = (entry: ApiFileEntry, anchorEl: HTMLElement) => {
+    const entryPath = getFileEntryPath(path, entry);
+    setSelectedEntryPath(entryPath);
+    setMenu({ anchorEl });
+  };
+  const openContextMenu = (event: React.MouseEvent<HTMLTableRowElement>, entry: ApiFileEntry) => {
+    event.preventDefault();
+    const entryPath = getFileEntryPath(path, entry);
+    setSelectedEntryPath(entryPath);
+    setMenu({ position: { top: event.clientY, left: event.clientX } });
+  };
+  const openEntry = (entry: ApiFileEntry) => {
+    closeMenu();
+    if (entry.isDirectory) {
+      setSelectedEntryPath(null);
+      setPath(getFileEntryPath(path, entry));
+    }
+  };
+  const openRename = () => {
+    if (!selectedEntry) return;
+    closeMenu();
+    setActionError(null);
+    setRenameValue(selectedEntry.name);
+    setRenameOpen(true);
+  };
+  const openDelete = () => {
+    if (!selectedEntry) return;
+    closeMenu();
+    setActionError(null);
+    setDeleteOpen(true);
+  };
+  const handleRename = () => {
+    if (!selectedTargetPath || !gameServerApi || !renameValue.trim()) return;
+    const parentPath = selectedTargetPath.split('/').slice(0, -1).join('/');
+    const destination = [parentPath, renameValue.trim()].filter(Boolean).join('/');
+    setActionBusy(true);
+    setActionError(null);
+    void gameServerApi.renameFile(selectedTargetPath, destination).then(() => {
+      setRenameOpen(false);
+      setSelectedEntryPath(null);
+      loadFiles();
+    }).catch(reason => setActionError(getFileOperationError(reason, 'Rename'))).finally(() => setActionBusy(false));
+  };
+  const handleDelete = () => {
+    if (!selectedTargetPath || !gameServerApi) return;
+    setActionBusy(true);
+    setActionError(null);
+    void gameServerApi.deleteFile(selectedTargetPath).then(() => {
+      setDeleteOpen(false);
+      setSelectedEntryPath(null);
+      loadFiles();
+    }).catch(reason => setActionError(getFileOperationError(reason, 'Delete'))).finally(() => setActionBusy(false));
+  };
   const rows = visibleEntries.map(entry => {
     const entryPath = entry.path || [path, entry.name].filter(Boolean).join('/');
-    return <tr key={entryPath}><td>{entry.isDirectory ? <Button className="path-button" onClick={() => setPath(entryPath)}>{entry.name}</Button> : <span>{entry.name}</span>}</td><td>{entry.isDirectory ? 'Directory' : 'File'}</td><td>{entry.isDirectory ? '—' : formatFileSize(entry.size)}</td><td>{formatFileModified(entry.modified)}</td><td /></tr>;
+    const selected = selectedEntryPath === entryPath;
+    return <tr key={entryPath} className={`file-browser-row${selected ? ' selected' : ''}`} tabIndex={0} onClick={() => setSelectedEntryPath(entryPath)} onDoubleClick={() => openEntry(entry)} onContextMenu={event => openContextMenu(event, entry)} onKeyDown={event => { if (event.key === 'Enter') openEntry(entry); if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) { event.preventDefault(); openEntryMenu(entry, event.currentTarget); } }}><td>{entry.name}</td><td>{entry.isDirectory ? 'Directory' : 'File'}</td><td>{entry.isDirectory ? '—' : formatFileSize(entry.size)}</td><td>{formatFileModified(entry.modified)}</td><td><IconButton className="file-row-action" size="small" aria-label={`Open actions for ${entry.name}`} onClick={event => { event.stopPropagation(); openEntryMenu(entry, event.currentTarget); }}><MoreVertIcon /></IconButton></td></tr>;
   });
   const emptyTitle = query ? 'No matching files' : 'No files in this folder';
   return <FeaturePanel title={item.label} description={item.description} icon={item.icon}>
@@ -247,17 +318,42 @@ function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: Fi
     {canBrowse && status === 'loading' && <EmptyState title="Loading files" description="Reading the current content directory from the GameServer API." icon={item.icon} />}
     {canBrowse && status === 'error' && <EmptyState title="Unable to load files" description={error ?? 'The GameServer API did not return a file listing.'} icon={item.icon} action={<Button className="rc-button rc-button-muted" onClick={loadFiles}>Try again</Button>} />}
     {canBrowse && status === 'ready' && <DataTable columns={['Name', 'Type', 'Size', 'Modified', '']} emptyTitle={emptyTitle} emptyDescription="No entries matched the current folder and filter." >{rows.length > 0 ? rows : undefined}</DataTable>}
+    <Menu open={Boolean(menu)} onClose={closeMenu} anchorEl={menu?.anchorEl} anchorReference={menu?.position ? 'anchorPosition' : 'anchorEl'} anchorPosition={menu?.position} PaperProps={{ className: 'file-context-menu-paper' }}>
+      <MenuItem disabled={!selectedEntry?.isDirectory} onClick={() => selectedEntry && openEntry(selectedEntry)}>Open</MenuItem>
+      <MenuItem disabled title="The current GameServer API does not expose file contents for editing">Edit</MenuItem>
+      <MenuItem disabled={!selectedEntry} onClick={openRename}>Rename</MenuItem>
+      <MenuItem disabled={!selectedEntry} onClick={openDelete}>Delete</MenuItem>
+    </Menu>
+    <Dialog open={renameOpen} onClose={() => !actionBusy && setRenameOpen(false)} fullWidth maxWidth="xs">
+      <DialogTitle>Rename {selectedEntry?.name}</DialogTitle>
+      <DialogContent><TextField autoFocus className="rc-text-field" label="New name" value={renameValue} onChange={event => setRenameValue(event.target.value)} fullWidth error={Boolean(actionError)} helperText={actionError ?? 'The name stays relative to the current folder.'} /></DialogContent>
+      <DialogActions><Button onClick={() => setRenameOpen(false)} disabled={actionBusy}>Cancel</Button><Button onClick={handleRename} disabled={actionBusy || !renameValue.trim()}>Rename</Button></DialogActions>
+    </Dialog>
+    <Dialog open={deleteOpen} onClose={() => !actionBusy && setDeleteOpen(false)} fullWidth maxWidth="xs">
+      <DialogTitle>Delete {selectedEntry?.name}?</DialogTitle>
+      <DialogContent><span className="dialog-copy">This removes the selected {selectedEntry?.isDirectory ? 'directory' : 'file'} from the GameServer content root.</span>{actionError && <div className="file-action-error" role="alert">{actionError}</div>}</DialogContent>
+      <DialogActions><Button onClick={() => setDeleteOpen(false)} disabled={actionBusy}>Cancel</Button><Button color="error" onClick={handleDelete} disabled={actionBusy}>Delete</Button></DialogActions>
+    </Dialog>
   </FeaturePanel>;
 }
 
 type FileBrowserStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-function getFileListingError(error: unknown): string {
+interface FileMenuState {
+  anchorEl?: HTMLElement;
+  position?: { top: number; left: number };
+}
+
+function getFileEntryPath(currentPath: string, entry: ApiFileEntry): string {
+  return entry.path || [currentPath, entry.name].filter(Boolean).join('/');
+}
+
+function getFileOperationError(error: unknown, operation: string): string {
   if (error instanceof ApiError) {
     if (error.status === 401) return 'The GameServer API session is no longer authorized.';
-    return `File listing failed (${error.status}).`;
+    return `${operation} failed (${error.status}).`;
   }
-  return error instanceof Error ? error.message : 'Could not load the file listing.';
+  return error instanceof Error ? error.message : `Could not complete the ${operation.toLowerCase()} operation.`;
 }
 
 function formatFileSize(size?: number | null): string {

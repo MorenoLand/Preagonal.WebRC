@@ -9,6 +9,7 @@ import { ConnectionPanel } from './ConnectionPanel';
 interface SidebarProps {
   activeFeature: FeatureId;
   connection: ConnectionForm;
+  connectionName: string;
   onSelect: (feature: FeatureId) => void;
   onConnectionChange: (value: ConnectionForm) => void;
   onConnect: () => void;
@@ -17,8 +18,8 @@ interface SidebarProps {
   connectionState: ConnectionState;
 }
 
-export function Sidebar({ activeFeature, connection, onSelect, onConnectionChange, onConnect, onFetchServers, fetchingServers, connectionState }: SidebarProps) {
-  const statusLabel = connectionState === 'connected' ? 'Connected' : connectionState === 'connecting' ? 'Connecting…' : 'Not Connected';
+export function Sidebar({ activeFeature, connection, connectionName, onSelect, onConnectionChange, onConnect, onFetchServers, fetchingServers, connectionState }: SidebarProps) {
+  const statusLabel = connectionState === 'connected' ? `Connected · ${connectionName || getEndpointLabel(connection.endpoint)}` : connectionState === 'connecting' ? 'Connecting…' : 'Not Connected';
   return (
     <aside className="sidebar">
       <header className="brand-header">
@@ -26,7 +27,7 @@ export function Sidebar({ activeFeature, connection, onSelect, onConnectionChang
         <div className="brand-copy"><strong>RC Web</strong><span>PREAGONAL CONTROL</span></div>
       </header>
       <div className="server-summary">
-        <div className="summary-status"><span className={`status-indicator status-${connectionState}`} />{statusLabel}</div>
+        <div className="summary-status"><span className={`status-indicator status-${connectionState}`} /><span className="summary-status-label">{statusLabel}</span></div>
         <span className="summary-count">0 online</span>
       </div>
       <nav className="sidebar-navigation" aria-label="Remote control navigation">
@@ -35,6 +36,14 @@ export function Sidebar({ activeFeature, connection, onSelect, onConnectionChang
       <ConnectionPanel value={connection} onChange={onConnectionChange} onConnect={onConnect} onFetchServers={onFetchServers} fetchingServers={fetchingServers} connecting={connectionState === 'connecting'} />
     </aside>
   );
+}
+
+function getEndpointLabel(endpoint: string): string {
+  try {
+    return new URL(endpoint).host || 'GameServer API';
+  } catch {
+    return endpoint || 'GameServer API';
+  }
 }
 
 interface NavigationSectionProps {

@@ -57,7 +57,7 @@ describe('App', () => {
     expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/login', expect.objectContaining({ method: 'POST' }));
     const request = fetchSpy.mock.calls[0][1] as RequestInit;
     expect(request.body).toBe(JSON.stringify({ account: 'staff', password: 'secret' }));
-    expect(screen.getByText('Connected')).toBeInTheDocument();
+    expect(screen.getByText('Connected · server.test')).toBeInTheDocument();
     expect(screen.getByText('RC chat unavailable')).toBeInTheDocument();
     fetchSpy.mockRestore();
   });
@@ -75,7 +75,7 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Connect' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Connected to http://server.test.'));
     await user.click(screen.getByRole('button', { name: 'File Browser' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'world' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('world')).toBeInTheDocument());
     expect(screen.getByText('start.nw')).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenNthCalledWith(2, 'http://server.test/api/v1/files', expect.objectContaining({ headers: expect.any(Headers) }));
     const request = fetchSpy.mock.calls[1][1] as RequestInit;
