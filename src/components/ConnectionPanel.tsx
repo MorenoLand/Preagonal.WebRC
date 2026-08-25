@@ -17,10 +17,12 @@ interface ConnectionPanelProps {
   fetchingServers?: boolean;
   connecting?: boolean;
   connectionName?: string;
+  serverDirectoryUrl: string;
+  onServerDirectoryUrlChange: (value: string) => void;
   connectionState: ConnectionState;
 }
 
-export function ConnectionPanel({ value, onChange, onConnect, onFetchServers, fetchingServers = false, connecting = false, connectionName = '', connectionState }: ConnectionPanelProps) {
+export function ConnectionPanel({ value, onChange, onConnect, onFetchServers, fetchingServers = false, connecting = false, connectionName = '', serverDirectoryUrl, onServerDirectoryUrlChange, connectionState }: ConnectionPanelProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   useEffect(() => { if (connectionState !== 'connected') setDetailsOpen(false); }, [connectionState]);
   const update = (field: keyof ConnectionForm) => (event: ChangeEvent<HTMLInputElement>) => onChange({ ...value, [field]: event.target.value });
@@ -33,6 +35,7 @@ export function ConnectionPanel({ value, onChange, onConnect, onFetchServers, fe
     <form className="connection-panel" onSubmit={submit}>
       <div className="connection-heading"><span>CONNECTION</span><span className="connection-dot" /></div>
       <TextField className="rc-text-field" label="GameServer API" placeholder="API base URL" value={value.endpoint} onChange={update('endpoint')} autoComplete="url" fullWidth />
+      <TextField className="rc-text-field" label="Server list API" placeholder="https://api.graalserver.com/servers" value={serverDirectoryUrl} onChange={event => onServerDirectoryUrlChange(event.target.value)} autoComplete="url" fullWidth />
       <TextField className="rc-text-field" label="Nickname" placeholder="Remote control name" value={value.nickname} onChange={update('nickname')} autoComplete="nickname" fullWidth />
       <TextField className="rc-text-field" label="Account" value={value.account} onChange={update('account')} autoComplete="username" fullWidth />
       <TextField className="rc-text-field" label="Password" type="password" value={value.password} onChange={update('password')} autoComplete="current-password" fullWidth />

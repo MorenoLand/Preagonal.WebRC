@@ -10,15 +10,17 @@ interface SidebarProps {
   activeFeature: FeatureId;
   connection: ConnectionForm;
   connectionName: string;
+  serverDirectoryUrl: string;
   onSelect: (feature: FeatureId) => void;
   onConnectionChange: (value: ConnectionForm) => void;
+  onServerDirectoryUrlChange: (value: string) => void;
   onConnect: () => void;
   onFetchServers: () => void;
   fetchingServers: boolean;
   connectionState: ConnectionState;
 }
 
-export function Sidebar({ activeFeature, connection, connectionName, onSelect, onConnectionChange, onConnect, onFetchServers, fetchingServers, connectionState }: SidebarProps) {
+export function Sidebar({ activeFeature, connection, connectionName, serverDirectoryUrl, onSelect, onConnectionChange, onServerDirectoryUrlChange, onConnect, onFetchServers, fetchingServers, connectionState }: SidebarProps) {
   const statusLabel = connectionState === 'connected' ? connectionName || getEndpointLabel(connection.endpoint) : connectionState === 'connecting' ? 'Connecting…' : 'Not Connected';
   return (
     <aside className="sidebar">
@@ -33,7 +35,7 @@ export function Sidebar({ activeFeature, connection, connectionName, onSelect, o
       <nav className="sidebar-navigation" aria-label="Remote control navigation">
         {navigationGroups.map(group => <NavigationSection key={group.label} group={group} activeFeature={activeFeature} onSelect={onSelect} />)}
       </nav>
-      <ConnectionPanel value={connection} connectionName={connectionName} connectionState={connectionState} onChange={onConnectionChange} onConnect={onConnect} onFetchServers={onFetchServers} fetchingServers={fetchingServers} connecting={connectionState === 'connecting'} />
+      <ConnectionPanel value={connection} connectionName={connectionName} serverDirectoryUrl={serverDirectoryUrl} connectionState={connectionState} onChange={onConnectionChange} onServerDirectoryUrlChange={onServerDirectoryUrlChange} onConnect={onConnect} onFetchServers={onFetchServers} fetchingServers={fetchingServers} connecting={connectionState === 'connecting'} />
     </aside>
   );
 }

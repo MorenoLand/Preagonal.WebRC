@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, GRAAL_SERVER_DIRECTORY_URL, HttpGameServerApi, createServerDirectoryApi, normalizeApiBaseUrl, normalizeFilePath } from './gameServerApi';
+import { ApiError, GRAAL_SERVER_DIRECTORY_URL, HttpGameServerApi, createServerDirectoryApi, normalizeApiBaseUrl, normalizeFilePath, normalizeServerDirectoryUrl } from './gameServerApi';
 
 function response(body: string, status = 200, contentType = 'application/json'): Response {
   return new Response(status === 204 ? null : body, { status, headers: { 'content-type': contentType } });
@@ -10,6 +10,12 @@ describe('GameServerApi', () => {
     expect(normalizeApiBaseUrl(' http://server.test:80/ ')).toBe('http://server.test');
     expect(normalizeApiBaseUrl('https://server.test:443/')).toBe('https://server.test');
     expect(normalizeApiBaseUrl('https://server.test:8443/')).toBe('https://server.test:8443');
+  });
+
+  it('normalizes configurable server directory URLs and rejects unsupported schemes', () => {
+    expect(normalizeServerDirectoryUrl(' https://directory.test/servers/ ')).toBe('https://directory.test/servers');
+    expect(normalizeServerDirectoryUrl('ftp://directory.test/servers')).toBe('');
+    expect(normalizeServerDirectoryUrl('directory.test/servers')).toBe('');
   });
 
   it('normalizes safe relative file paths and rejects traversal', () => {
@@ -61,8 +67,15 @@ describe('GameServerApi', () => {
 
   it('builds the public server directory request', async () => {
     const fetchSpy = vi.fn().mockResolvedValue(response(JSON.stringify({ status: 'ok', siteUrl: '', donateUrl: '', servers: [] })));
-    const api = createServerDirectoryApi(fetchSpy);
+    const api = createServerDirectoryApi(GRAAL_SERVER_DIRECTORY_URL, fetchSpy);
     await api.listServers();
     expect(fetchSpy).toHaveBeenCalledWith(GRAAL_SERVER_DIRECTORY_URL, { headers: { Accept: 'application/json' } });
+  });
+
+  it('builds a request for a configured server directory URL', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(response(JSON.stringify({ status: 'ok', siteUrl: '', donateUrl: '', servers: [] })));
+    const api = createServerDirectoryApi('https://directory.test/servers/', fetchSpy);
+    await api.listServers();
+    expect(fetchSpy).toHaveBeenCalledWith('https://directory.test/servers', { headers: { Accept: 'application/json' } });
   });
 });

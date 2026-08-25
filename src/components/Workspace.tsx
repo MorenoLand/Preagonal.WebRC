@@ -172,7 +172,7 @@ function ServersPanel({ item, servers, status, error, onFetchServers, onUseServe
   });
   return <section className="feature-panel servers-panel">
     <div className="feature-panel-body">
-      {status === 'loading' && <EmptyState title="Loading server list" description="Polling api.graalserver.com for online servers." icon={item.icon} />}
+      {status === 'loading' && <EmptyState title="Loading server list" description="Polling the configured server directory for online servers." icon={item.icon} />}
       {status === 'error' && <EmptyState title="Unable to load servers" description={error ?? 'The public server directory could not be read.'} icon={item.icon} action={<Button className="rc-button rc-button-muted" onClick={onFetchServers}>Try again</Button>} />}
       {status !== 'loading' && status !== 'error' && servers.length === 0 && <EmptyState title="No servers loaded" description="Fetch the public server directory to see available IPs and ports." icon={item.icon} />}
       {status === 'ready' && servers.length > 0 && <>

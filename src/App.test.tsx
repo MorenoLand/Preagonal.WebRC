@@ -45,6 +45,21 @@ describe('App', () => {
     fetchSpy.mockRestore();
   });
 
+  it('fetches servers from the configured directory URL and persists it', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ status: 'ok', siteUrl: '', donateUrl: '', servers: [{ id: 'custom-1', name: 'Custom Directory Server', type: 'Hosted', description: '', url: '', language: 'English', version: '1', playerCount: 0, players: [], ip: 'custom.test', port: 14916, latency: 0, allowedVersions: [] }] }), { headers: { 'content-type': 'application/json' } }));
+    render(<App />);
+    const directoryInput = screen.getByRole('textbox', { name: 'Server list API' });
+    await user.clear(directoryInput);
+    await user.type(directoryInput, 'https://directory.test/servers/');
+    await user.click(screen.getByRole('button', { name: 'Fetch Servers' }));
+    await waitFor(() => expect(screen.getByText('Custom Directory Server')).toBeInTheDocument());
+    expect(fetchSpy).toHaveBeenCalledWith('https://directory.test/servers', expect.objectContaining({ headers: { Accept: 'application/json' } }));
+    expect(window.localStorage.getItem('preagonal.webrc.server-directory-url.v1')).toBe('https://directory.test/servers');
+    window.localStorage.removeItem('preagonal.webrc.server-directory-url.v1');
+    fetchSpy.mockRestore();
+  });
+
   it('authenticates against the selected GameServer API endpoint', async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('jwt-token', { headers: { 'content-type': 'text/plain' } })).mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', siteUrl: '', donateUrl: '', servers: [{ id: 'server-1', name: 'SharpServer TEST', type: 'Hidden', description: '', url: '', language: 'English', version: '0.0.25', playerCount: 0, players: [], ip: 'server.test', port: 14916, latency: 0, allowedVersions: [] }] }), { headers: { 'content-type': 'application/json' } }));

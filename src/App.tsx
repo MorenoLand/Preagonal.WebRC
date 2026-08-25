@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { ApiError, ApiNotImplementedError, createHttpGameServerApi, createPlaceholderApi, createServerDirectoryApi, normalizeApiBaseUrl, type GraalServer } from './api/gameServerApi';
+import { ApiError, ApiNotImplementedError, createHttpGameServerApi, createPlaceholderApi, createServerDirectoryApi, GRAAL_SERVER_DIRECTORY_URL, normalizeApiBaseUrl, normalizeServerDirectoryUrl, type GraalServer } from './api/gameServerApi';
 import { AppShell } from './components/AppShell';
 import { Sidebar } from './components/Sidebar';
 import { Workspace } from './components/Workspace';
@@ -11,11 +11,13 @@ import type { ActionNotice, ConnectionForm, ConnectionState, FeatureId, ServerDi
 import './styles.css';
 
 const initialConnection: ConnectionForm = { endpoint: '', nickname: '', account: '', password: '' };
+const serverDirectoryStorageKey = 'preagonal.webrc.server-directory-url.v1';
 
 export function App() {
   const [activeFeature, setActiveFeature] = useState<FeatureId>('chat');
   const [openFeatures, setOpenFeatures] = useState<FeatureId[]>(['chat']);
   const [connection, setConnection] = useState<ConnectionForm>(initialConnection);
+  const [serverDirectoryUrl, setServerDirectoryUrl] = useState(() => getStoredServerDirectoryUrl());
   const [connectionName, setConnectionName] = useState('');
   const [connectionState, setConnectionState] = useState<ConnectionState>('offline');
   const [notice, setNotice] = useState<ActionNotice | null>(null);
@@ -23,8 +25,18 @@ export function App() {
   const [serverDirectoryStatus, setServerDirectoryStatus] = useState<ServerDirectoryStatus>('idle');
   const [serverDirectoryError, setServerDirectoryError] = useState<string | null>(null);
   const placeholderApi = useMemo(() => createPlaceholderApi(), []);
-  const serverDirectoryApi = useMemo(() => createServerDirectoryApi(), []);
+  const serverDirectoryApi = useMemo(() => {
+    const normalizedUrl = normalizeServerDirectoryUrl(serverDirectoryUrl);
+    return normalizedUrl ? createServerDirectoryApi(normalizedUrl) : null;
+  }, [serverDirectoryUrl]);
   const gameServerApi = useMemo(() => connection.endpoint.trim() ? createHttpGameServerApi(connection.endpoint) : null, [connection.endpoint]);
+  useEffect(() => {
+    const normalizedUrl = normalizeServerDirectoryUrl(serverDirectoryUrl);
+    try {
+      if (normalizedUrl) window.localStorage.setItem(serverDirectoryStorageKey, normalizedUrl);
+      else window.localStorage.removeItem(serverDirectoryStorageKey);
+    } catch { }
+  }, [serverDirectoryUrl]);
 
   const openFeature = useCallback((feature: FeatureId) => {
     setActiveFeature(feature);
@@ -59,6 +71,12 @@ export function App() {
     if (value.endpoint.trim() !== connection.endpoint.trim()) setConnectionName('');
     setConnection(value);
   }, [connection.account, connection.endpoint, connection.password]);
+  const handleServerDirectoryUrlChange = useCallback((value: string) => {
+    setServerDirectoryUrl(value);
+    setServers([]);
+    setServerDirectoryStatus('idle');
+    setServerDirectoryError(null);
+  }, []);
   const handleConnect = useCallback(() => {
     const endpoint = normalizeApiBaseUrl(connection.endpoint);
     const account = connection.account.trim();
@@ -78,6 +96,7 @@ export function App() {
         setConnectionName(knownServerName);
         return;
       }
+      if (!serverDirectoryApi) return;
       void serverDirectoryApi.listServers().then(response => {
         const serverName = findServerName(endpoint, response.servers);
         if (serverName) setConnectionName(serverName);
@@ -89,6 +108,12 @@ export function App() {
   }, [connection.account, connection.endpoint, connection.password, connectionName, gameServerApi, serverDirectoryApi, servers]);
   const handleFetchServers = useCallback(() => {
     openFeature('servers');
+    if (!serverDirectoryApi) {
+      setServers([]);
+      setServerDirectoryStatus('error');
+      setServerDirectoryError('Enter a valid HTTP(S) server directory URL.');
+      return;
+    }
     setServerDirectoryStatus('loading');
     setServerDirectoryError(null);
     void serverDirectoryApi.listServers().then(response => {
@@ -112,10 +137,19 @@ export function App() {
 
   return <ThemeProvider theme={appTheme}>
     <CssBaseline />
-    <AppShell sidebar={<Sidebar activeFeature={activeFeature} connection={connection} connectionName={connectionName} onSelect={openFeature} onConnectionChange={handleConnectionChange} onConnect={handleConnect} onFetchServers={handleFetchServers} fetchingServers={serverDirectoryStatus === 'loading'} connectionState={connectionState} />}>
+    <AppShell sidebar={<Sidebar activeFeature={activeFeature} connection={connection} connectionName={connectionName} serverDirectoryUrl={serverDirectoryUrl} onSelect={openFeature} onConnectionChange={handleConnectionChange} onServerDirectoryUrlChange={handleServerDirectoryUrlChange} onConnect={handleConnect} onFetchServers={handleFetchServers} fetchingServers={serverDirectoryStatus === 'loading'} connectionState={connectionState} />}>
       <Workspace activeFeature={activeFeature} openFeatures={openFeatures} notice={notice} connectionState={connectionState} gameServerApi={gameServerApi} onSelect={openFeature} onClose={closeFeature} onAction={handleAction} servers={servers} serverDirectoryStatus={serverDirectoryStatus} serverDirectoryError={serverDirectoryError} onFetchServers={handleFetchServers} onUseServer={handleUseServer} />
     </AppShell>
   </ThemeProvider>;
+}
+
+function getStoredServerDirectoryUrl(): string {
+  try {
+    const stored = window.localStorage.getItem(serverDirectoryStorageKey);
+    return stored && normalizeServerDirectoryUrl(stored) ? normalizeServerDirectoryUrl(stored) : GRAAL_SERVER_DIRECTORY_URL;
+  } catch {
+    return GRAAL_SERVER_DIRECTORY_URL;
+  }
 }
 
 function findServerName(endpoint: string, servers: readonly GraalServer[]): string {

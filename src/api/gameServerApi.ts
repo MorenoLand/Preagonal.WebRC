@@ -117,11 +117,28 @@ export function normalizeApiBaseUrl(value: string): string {
   }
 }
 
+export function normalizeServerDirectoryUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.toString().replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
 export class HttpServerDirectoryApi implements ServerDirectoryApi {
-  constructor(private readonly fetchImpl: FetchLike = browserFetch) {}
+  private readonly directoryUrl: string;
+
+  constructor(directoryUrl = GRAAL_SERVER_DIRECTORY_URL, private readonly fetchImpl: FetchLike = browserFetch) {
+    this.directoryUrl = normalizeServerDirectoryUrl(directoryUrl);
+    if (!this.directoryUrl) throw new Error('Server directory URL must use http or https.');
+  }
 
   async listServers(): Promise<GraalServerDirectoryResponse> {
-    const response = await this.fetchImpl(GRAAL_SERVER_DIRECTORY_URL, { headers: { Accept: 'application/json' } });
+    const response = await this.fetchImpl(this.directoryUrl, { headers: { Accept: 'application/json' } });
     const body = await response.text();
     if (!response.ok)
       throw new ApiError(response.status, body || response.statusText);
@@ -285,6 +302,6 @@ export function createHttpGameServerApi(baseUrl: string, fetchImpl?: FetchLike):
   return new HttpGameServerApi(baseUrl, fetchImpl);
 }
 
-export function createServerDirectoryApi(fetchImpl?: FetchLike): HttpServerDirectoryApi {
-  return new HttpServerDirectoryApi(fetchImpl);
+export function createServerDirectoryApi(directoryUrl = GRAAL_SERVER_DIRECTORY_URL, fetchImpl?: FetchLike): HttpServerDirectoryApi {
+  return new HttpServerDirectoryApi(directoryUrl, fetchImpl);
 }
