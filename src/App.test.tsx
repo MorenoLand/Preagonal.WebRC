@@ -77,6 +77,8 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'File Browser' }));
     await waitFor(() => expect(screen.getByText('world')).toBeInTheDocument());
     expect(screen.getByText('start.nw')).toBeInTheDocument();
+    expect(screen.getByTestId('file-entry-icon-world')).toBeInTheDocument();
+    expect(screen.getByTestId('file-entry-icon-start.nw')).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenNthCalledWith(2, 'http://server.test/api/v1/files', expect.objectContaining({ headers: expect.any(Headers) }));
     const request = fetchSpy.mock.calls[1][1] as RequestInit;
     expect((request.headers as Headers).get('Authorization')).toBe('Bearer jwt-token');

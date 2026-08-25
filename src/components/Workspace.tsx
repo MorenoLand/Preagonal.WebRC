@@ -24,6 +24,7 @@ import type { ActionNotice, ConnectionState, FeatureId, ServerDirectoryStatus } 
 import { CodeEditor } from './CodeEditor';
 import { DataTable, FeaturePanel, ToolRow } from './FeaturePanel';
 import { EmptyState } from './EmptyState';
+import { FileEntryIcon } from './FileEntryIcon';
 
 interface WorkspaceProps {
   activeFeature: FeatureId;
@@ -303,7 +304,7 @@ function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: Fi
   const rows = visibleEntries.map(entry => {
     const entryPath = entry.path || [path, entry.name].filter(Boolean).join('/');
     const selected = selectedEntryPath === entryPath;
-    return <tr key={entryPath} className={`file-browser-row${selected ? ' selected' : ''}`} tabIndex={0} onClick={() => setSelectedEntryPath(entryPath)} onDoubleClick={() => openEntry(entry)} onContextMenu={event => openContextMenu(event, entry)} onKeyDown={event => { if (event.key === 'Enter') openEntry(entry); if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) { event.preventDefault(); openEntryMenu(entry, event.currentTarget); } }}><td>{entry.name}</td><td>{entry.isDirectory ? 'Directory' : 'File'}</td><td>{entry.isDirectory ? '—' : formatFileSize(entry.size)}</td><td>{formatFileModified(entry.modified)}</td><td><IconButton className="file-row-action" size="small" aria-label={`Open actions for ${entry.name}`} onClick={event => { event.stopPropagation(); openEntryMenu(entry, event.currentTarget); }}><MoreVertIcon /></IconButton></td></tr>;
+    return <tr key={entryPath} className={`file-browser-row${selected ? ' selected' : ''}`} tabIndex={0} onClick={() => setSelectedEntryPath(entryPath)} onDoubleClick={() => openEntry(entry)} onContextMenu={event => openContextMenu(event, entry)} onKeyDown={event => { if (event.key === 'Enter') openEntry(entry); if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) { event.preventDefault(); openEntryMenu(entry, event.currentTarget); } }}><td><span className="file-entry-cell"><FileEntryIcon entry={entry} /><span className="file-entry-name">{entry.name}</span></span></td><td>{entry.isDirectory ? 'Directory' : 'File'}</td><td>{entry.isDirectory ? '—' : formatFileSize(entry.size)}</td><td>{formatFileModified(entry.modified)}</td><td><IconButton className="file-row-action" size="small" aria-label={`Open actions for ${entry.name}`} onClick={event => { event.stopPropagation(); openEntryMenu(entry, event.currentTarget); }}><MoreVertIcon /></IconButton></td></tr>;
   });
   const emptyTitle = query ? 'No matching files' : 'No files in this folder';
   return <FeaturePanel title={item.label} description={item.description} icon={item.icon}>
