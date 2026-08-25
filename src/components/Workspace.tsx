@@ -21,6 +21,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import { navigationById, type NavigationItem } from '../navigation';
 import { ApiError, type ApiFileEntry, type GameServerApi, type GraalServer } from '../api/gameServerApi';
 import type { ActionNotice, ConnectionState, FeatureId, ServerDirectoryStatus } from '../types';
+import { CodeEditor } from './CodeEditor';
 import { DataTable, FeaturePanel, ToolRow } from './FeaturePanel';
 import { EmptyState } from './EmptyState';
 
@@ -381,7 +382,7 @@ function EditorPanel({ item, operation, onAction }: EditorPanelProps) {
       <Button className="rc-button rc-button-primary" onClick={() => onAction(item.id, `update ${item.label.toLowerCase()}`)} startIcon={<CodeIcon />}>Save changes</Button>
     </>}>
     </ToolRow>
-    <TextField className="rc-editor" multiline minRows={15} value={source} onChange={event => setSource(event.target.value)} placeholder="Source will appear here when this API surface is available." fullWidth />
+    <CodeEditor ariaLabel={`${item.label} source editor`} language="ini" path={`preagonal://${item.id}`} value={source} onChange={setSource} />
     <div className="editor-footer"><span>UTF-8</span><span>{source.length} characters</span></div>
   </FeaturePanel>;
 }
