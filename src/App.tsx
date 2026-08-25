@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { ApiError, ApiNotImplementedError, createHttpGameServerApi, createPlaceholderApi, createServerDirectoryApi, GRAAL_SERVER_DIRECTORY_URL, normalizeApiBaseUrl, normalizeServerDirectoryUrl, type GraalServer } from './api/gameServerApi';
+import { ApiError, ApiNotImplementedError, createHttpGameServerApi, createPlaceholderApi, createServerDirectoryApi, GRAAL_SERVER_DIRECTORY_URL, normalizeApiBaseUrl, normalizeServerDirectoryUrl, type GraalServer, type ServerStats } from './api/gameServerApi';
 import { AppShell } from './components/AppShell';
 import { Sidebar } from './components/Sidebar';
 import { Workspace } from './components/Workspace';
@@ -20,6 +20,8 @@ export function App() {
   const [serverDirectoryUrl, setServerDirectoryUrl] = useState(() => getStoredServerDirectoryUrl());
   const [connectionName, setConnectionName] = useState('');
   const [connectionState, setConnectionState] = useState<ConnectionState>('offline');
+  const [serverStats, setServerStats] = useState<ServerStats | null>(null);
+  const [serverStatsLoading, setServerStatsLoading] = useState(false);
   const [notice, setNotice] = useState<ActionNotice | null>(null);
   const [servers, setServers] = useState<readonly GraalServer[]>([]);
   const [serverDirectoryStatus, setServerDirectoryStatus] = useState<ServerDirectoryStatus>('idle');
@@ -66,6 +68,8 @@ export function App() {
   const handleConnectionChange = useCallback((value: ConnectionForm) => {
     if (value.endpoint.trim() !== connection.endpoint.trim() || value.account.trim() !== connection.account.trim() || value.password !== connection.password) {
       setConnectionState('offline');
+      setServerStats(null);
+      setServerStatsLoading(false);
       setNotice(null);
     }
     if (value.endpoint.trim() !== connection.endpoint.trim()) setConnectionName('');
@@ -87,10 +91,13 @@ export function App() {
     }
     if (!gameServerApi) return;
     setConnectionState('connecting');
+    setServerStats(null);
+    setServerStatsLoading(true);
     setNotice(null);
     void gameServerApi.login({ account, password: connection.password }).then(() => {
       setConnectionState('connected');
       setNotice({ kind: 'success', text: `Connected to ${endpoint}.` });
+      void gameServerApi.getStats().then(setServerStats).catch(() => setServerStats(null)).finally(() => setServerStatsLoading(false));
       const knownServerName = connectionName || findServerName(endpoint, servers);
       if (knownServerName) {
         setConnectionName(knownServerName);
@@ -103,6 +110,8 @@ export function App() {
       }).catch(() => undefined);
     }).catch(error => {
       setConnectionState('offline');
+      setServerStats(null);
+      setServerStatsLoading(false);
       setNotice({ kind: 'error', text: getConnectionErrorMessage(error) });
     });
   }, [connection.account, connection.endpoint, connection.password, connectionName, gameServerApi, serverDirectoryApi, servers]);
@@ -132,12 +141,14 @@ export function App() {
     setConnectionName(server.name);
     setConnection(current => ({ ...current, endpoint }));
     setConnectionState('offline');
+    setServerStats(null);
+    setServerStatsLoading(false);
     setNotice({ kind: 'success', text: `${server.name} selected.` });
   }, []);
 
   return <ThemeProvider theme={appTheme}>
     <CssBaseline />
-    <AppShell sidebar={<Sidebar activeFeature={activeFeature} connection={connection} connectionName={connectionName} serverDirectoryUrl={serverDirectoryUrl} onSelect={openFeature} onConnectionChange={handleConnectionChange} onServerDirectoryUrlChange={handleServerDirectoryUrlChange} onConnect={handleConnect} onFetchServers={handleFetchServers} fetchingServers={serverDirectoryStatus === 'loading'} connectionState={connectionState} />}>
+    <AppShell sidebar={<Sidebar activeFeature={activeFeature} connection={connection} connectionName={connectionName} onlinePlayers={serverStats?.players ?? null} statsLoading={serverStatsLoading} serverDirectoryUrl={serverDirectoryUrl} onSelect={openFeature} onConnectionChange={handleConnectionChange} onServerDirectoryUrlChange={handleServerDirectoryUrlChange} onConnect={handleConnect} onFetchServers={handleFetchServers} fetchingServers={serverDirectoryStatus === 'loading'} connectionState={connectionState} />}>
       <Workspace activeFeature={activeFeature} openFeatures={openFeatures} notice={notice} connectionState={connectionState} gameServerApi={gameServerApi} onSelect={openFeature} onClose={closeFeature} onAction={handleAction} servers={servers} serverDirectoryStatus={serverDirectoryStatus} serverDirectoryError={serverDirectoryError} onFetchServers={handleFetchServers} onUseServer={handleUseServer} />
     </AppShell>
   </ThemeProvider>;

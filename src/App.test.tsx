@@ -71,7 +71,7 @@ describe('App', () => {
 
   it('authenticates against the selected GameServer API endpoint', async () => {
     const user = userEvent.setup();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('jwt-token', { headers: { 'content-type': 'text/plain' } })).mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', siteUrl: '', donateUrl: '', servers: [{ id: 'server-1', name: 'SharpServer TEST', type: 'Hidden', description: '', url: '', language: 'English', version: '0.0.25', playerCount: 0, players: [], ip: 'server.test', port: 14916, latency: 0, allowedVersions: [] }] }), { headers: { 'content-type': 'application/json' } }));
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('jwt-token', { headers: { 'content-type': 'text/plain' } })).mockResolvedValueOnce(new Response(JSON.stringify({ levels: 1, players: 0 }), { headers: { 'content-type': 'application/json' } })).mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', siteUrl: '', donateUrl: '', servers: [{ id: 'server-1', name: 'SharpServer TEST', type: 'Hidden', description: '', url: '', language: 'English', version: '0.0.25', playerCount: 0, players: [], ip: 'server.test', port: 14916, latency: 0, allowedVersions: [] }] }), { headers: { 'content-type': 'application/json' } }));
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Configure API endpoints' }));
     await user.type(screen.getByRole('textbox', { name: 'GameServer API' }), 'http://server.test');
@@ -96,10 +96,16 @@ describe('App', () => {
 
   it('lists files after the GameServer API session is authenticated', async () => {
     const user = userEvent.setup();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('jwt-token', { headers: { 'content-type': 'text/plain' } })).mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', siteUrl: '', donateUrl: '', servers: [] }), { headers: { 'content-type': 'application/json' } })).mockResolvedValueOnce(new Response(JSON.stringify([
+    const fileListing = JSON.stringify([
       { name: 'world', path: 'world', isDirectory: true, size: null, modified: null },
       { name: 'start.nw', path: 'start.nw', isDirectory: false, size: 2048, modified: '2026-08-25T12:00:00Z' }
-    ]), { headers: { 'content-type': 'application/json' } }));
+    ]);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('jwt-token', { headers: { 'content-type': 'text/plain' } })).mockResolvedValueOnce(new Response(JSON.stringify({ levels: 2, players: 4 }), { headers: { 'content-type': 'application/json' } })).mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', siteUrl: '', donateUrl: '', servers: [] }), { headers: { 'content-type': 'application/json' } })).mockResolvedValueOnce(new Response(fileListing, { headers: { 'content-type': 'application/json' } })).mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.endsWith('/start.nw')) return Promise.resolve(new Response('echo original', { headers: { 'content-type': 'text/plain' } }));
+      if ((init?.method ?? 'GET') === 'GET') return Promise.resolve(new Response(fileListing, { headers: { 'content-type': 'application/json' } }));
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Configure API endpoints' }));
     await user.type(screen.getByRole('textbox', { name: 'GameServer API' }), 'http://server.test');
@@ -109,15 +115,31 @@ describe('App', () => {
     await user.type(screen.getByLabelText('Password'), 'secret');
     await user.click(screen.getByRole('button', { name: 'Connect' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Connected to http://server.test.'));
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(3));
     await user.click(screen.getByRole('button', { name: 'File Browser' }));
     await waitFor(() => expect(screen.getByText('world')).toBeInTheDocument());
     expect(screen.getByText('start.nw')).toBeInTheDocument();
     expect(screen.getByTestId('file-entry-icon-world')).toBeInTheDocument();
     expect(screen.getByTestId('file-entry-icon-start.nw')).toBeInTheDocument();
-    expect(fetchSpy).toHaveBeenNthCalledWith(3, 'http://server.test/api/v1/files', expect.objectContaining({ headers: expect.any(Headers) }));
-    const request = fetchSpy.mock.calls[2][1] as RequestInit;
+    expect(fetchSpy).toHaveBeenNthCalledWith(4, 'http://server.test/api/v1/files', expect.objectContaining({ headers: expect.any(Headers) }));
+    const request = fetchSpy.mock.calls[3][1] as RequestInit;
     expect((request.headers as Headers).get('Authorization')).toBe('Bearer jwt-token');
+    await user.click(screen.getByRole('button', { name: 'Open actions for start.nw' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    const editor = await screen.findByRole('textbox', { name: 'Edit start.nw' });
+    expect(editor).toHaveValue('echo original');
+    await user.clear(editor);
+    await user.type(editor, 'echo updated');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/files/start.nw?overwrite=true', expect.objectContaining({ method: 'PUT', body: expect.any(FormData) })));
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit start.nw' })).not.toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'New folder' }));
+    await user.type(screen.getByRole('textbox', { name: 'Folder name' }), 'new-folder');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/files/new-folder?directory=true', expect.objectContaining({ method: 'PUT', body: expect.any(FormData) })));
+    await user.upload(screen.getByLabelText('Choose a file to upload'), new File(['uploaded'], 'uploaded.nw', { type: 'text/plain' }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('http://server.test/api/v1/files/uploaded.nw', expect.objectContaining({ method: 'PUT', body: expect.any(FormData) })));
     fetchSpy.mockRestore();
   });
 

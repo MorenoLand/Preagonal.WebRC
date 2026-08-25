@@ -138,6 +138,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .file-context-menu-paper .MuiMenuItem-root.Mui-disabled { color: var(--quiet); }
 .dialog-copy { color: var(--muted); font-size: 13px; line-height: 1.6; }
 .file-action-error { margin-top: 12px; color: #ffb3b3; font-size: 12px; }
+.file-upload-input { display: none; }
+.file-editor-dialog .MuiDialog-paper { width: min(1100px, calc(100vw - 32px)); max-width: none; }
+.file-editor-dialog .MuiDialogContent-root { min-height: 420px; }
+.file-editor-state { min-height: 300px; display: flex; align-items: center; justify-content: center; color: var(--quiet); font-size: 13px; text-align: center; }
 .table-sort-button { display: inline-flex; align-items: center; gap: 6px; min-height: 22px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; letter-spacing: inherit; text-transform: inherit; }
 .table-sort-button:hover, .table-sort-button:focus-visible { color: var(--text); }
 .table-sort-button svg { width: 15px; height: 15px; }

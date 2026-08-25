@@ -10,6 +10,8 @@ interface SidebarProps {
   activeFeature: FeatureId;
   connection: ConnectionForm;
   connectionName: string;
+  onlinePlayers: number | null;
+  statsLoading: boolean;
   serverDirectoryUrl: string;
   onSelect: (feature: FeatureId) => void;
   onConnectionChange: (value: ConnectionForm) => void;
@@ -20,8 +22,9 @@ interface SidebarProps {
   connectionState: ConnectionState;
 }
 
-export function Sidebar({ activeFeature, connection, connectionName, serverDirectoryUrl, onSelect, onConnectionChange, onServerDirectoryUrlChange, onConnect, onFetchServers, fetchingServers, connectionState }: SidebarProps) {
+export function Sidebar({ activeFeature, connection, connectionName, onlinePlayers, statsLoading, serverDirectoryUrl, onSelect, onConnectionChange, onServerDirectoryUrlChange, onConnect, onFetchServers, fetchingServers, connectionState }: SidebarProps) {
   const statusLabel = connectionState === 'connected' ? connectionName || getEndpointLabel(connection.endpoint) : connectionState === 'connecting' ? 'Connecting…' : 'Not Connected';
+  const summaryCount = connectionState !== 'connected' ? '0 online' : statsLoading ? '… online' : onlinePlayers === null ? '— online' : `${onlinePlayers} online`;
   return (
     <aside className="sidebar">
       <header className="brand-header">
@@ -30,7 +33,7 @@ export function Sidebar({ activeFeature, connection, connectionName, serverDirec
       </header>
       <div className="server-summary">
         <div className="summary-status"><span className={`status-indicator status-${connectionState}`} /><span className="summary-status-label">{statusLabel}</span></div>
-        <span className="summary-count">0 online</span>
+        <span className="summary-count">{summaryCount}</span>
       </div>
       <nav className="sidebar-navigation" aria-label="Remote control navigation">
         {navigationGroups.map(group => <NavigationSection key={group.label} group={group} activeFeature={activeFeature} onSelect={onSelect} />)}

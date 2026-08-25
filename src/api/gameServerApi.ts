@@ -1,5 +1,5 @@
 import { ApiException as GeneratedApiException, GameServerClient, LoginRequest as GeneratedLoginRequest } from './generated/gameServerClient';
-import type { FileParameter } from './generated/gameServerClient';
+import type { FileParameter, ScriptExecutionStatistic, ScriptTypeMetadata } from './generated/gameServerClient';
 
 export interface LoginRequest {
   account: string;
@@ -14,7 +14,10 @@ export interface ApiFileEntry {
   modified?: string | null;
 }
 
-export type ServerStats = Awaited<ReturnType<GameServerClient['stats']>>;
+export interface ServerStats {
+  levels: number;
+  players: number;
+}
 
 export interface GraalServerPlayer {
   id: number;
@@ -65,12 +68,13 @@ export interface FileWriteOptions {
 export interface GameServerApi {
   login(request: LoginRequest): Promise<string>;
   getStats(): Promise<ServerStats>;
+  getFileContent(path: string): Promise<string>;
   listFiles(path?: string): Promise<readonly ApiFileEntry[]>;
   putFile(path: string, file?: File, options?: FileWriteOptions): Promise<void>;
   renameFile(path: string, destination: string): Promise<void>;
   deleteFile(path: string): Promise<void>;
-  getScriptDefinitions(): Promise<unknown>;
-  getScriptStats(): Promise<unknown>;
+  getScriptDefinitions(): Promise<readonly ScriptTypeMetadata[]>;
+  getScriptStats(): Promise<readonly ScriptExecutionStatistic[]>;
   listPlayers(): Promise<never>;
   sendChat(message: string): Promise<never>;
   getServerOptions(): Promise<never>;
@@ -191,6 +195,11 @@ function readStringList(value: unknown): readonly string[] {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
+function normalizeStats(body: string): ServerStats {
+  const payload = asRecord(JSON.parse(body), 'server stats response');
+  return { levels: readNumber(payload, 'levels', 'Levels'), players: readNumber(payload, 'players', 'Players') };
+}
+
 export function normalizeFilePath(value: string): string {
   const normalized = value.replaceAll('\\', '/').split('/').filter(Boolean).join('/');
   if (normalized.includes(':') || normalized.split('/').some(part => part === '.' || part === '..'))
@@ -207,10 +216,12 @@ function emptyMultipartFile(): FileParameter {
 
 export class HttpGameServerApi implements GameServerApi {
   private token: string | null = null;
+  private readonly baseUrl: string;
   private readonly client: GameServerClient;
 
   constructor(baseUrl: string, private readonly fetchImpl: FetchLike = browserFetch) {
-    this.client = new GameServerClient(normalizeApiBaseUrl(baseUrl), { fetch: (input, init) => this.fetchWithAuth(input, init) });
+    this.baseUrl = normalizeApiBaseUrl(baseUrl);
+    this.client = new GameServerClient(this.baseUrl, { fetch: (input, init) => this.fetchWithAuth(input, init) });
   }
 
   setToken(token: string | null): void {
@@ -224,8 +235,15 @@ export class HttpGameServerApi implements GameServerApi {
     return token;
   }
 
-  getStats(): Promise<ServerStats> {
-    return this.run(() => this.client.stats());
+  async getStats(): Promise<ServerStats> {
+    const body = await this.readBody(`${this.baseUrl}/api/v1/stats`, { headers: { Accept: 'application/json' } }, 'Server stats');
+    return normalizeStats(body);
+  }
+
+  async getFileContent(path: string): Promise<string> {
+    const normalized = normalizeFilePath(path);
+    if (!normalized) throw new Error('A file path is required.');
+    return this.readBody(`${this.baseUrl}/api/v1/files/${encodeURIComponent(normalized)}`, { headers: { Accept: 'text/plain, application/octet-stream' } }, 'File read');
   }
 
   async listFiles(path = ''): Promise<readonly ApiFileEntry[]> {
@@ -252,11 +270,11 @@ export class HttpGameServerApi implements GameServerApi {
     return this.run(() => normalized ? this.client.filesDELETE2(normalized) : this.client.filesDELETE());
   }
 
-  getScriptDefinitions(): Promise<unknown> {
+  getScriptDefinitions(): Promise<readonly ScriptTypeMetadata[]> {
     return this.run(() => this.client.definitions());
   }
 
-  getScriptStats(): Promise<unknown> {
+  getScriptStats(): Promise<readonly ScriptExecutionStatistic[]> {
     return this.run(() => this.client.statsAll());
   }
 
@@ -292,6 +310,13 @@ export class HttpGameServerApi implements GameServerApi {
     return this.fetchImpl(input, { ...init, headers });
   }
 
+  private async readBody(input: RequestInfo | URL, init: RequestInit, operation: string): Promise<string> {
+    const response = await this.fetchWithAuth(input, init);
+    const body = await response.text();
+    if (!response.ok) throw new ApiError(response.status, body || response.statusText || `${operation} failed.`);
+    return body;
+  }
+
   private async run<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
@@ -305,12 +330,13 @@ export class HttpGameServerApi implements GameServerApi {
 
 export class PlaceholderGameServerApi {
   async getStats(): Promise<ServerStats> { return this.run('server stats', 'read'); }
+  async getFileContent(_path: string): Promise<string> { return this.run('file browser', 'read'); }
   async listFiles(_path = ''): Promise<readonly ApiFileEntry[]> { return this.run('file browser', 'list'); }
   async putFile(_path: string, _file?: File, _options?: FileWriteOptions): Promise<void> { return this.run('file browser', 'write'); }
   async renameFile(_path: string, _destination: string): Promise<void> { return this.run('file browser', 'rename'); }
   async deleteFile(_path: string): Promise<void> { return this.run('file browser', 'delete'); }
-  async getScriptDefinitions(): Promise<unknown> { return this.run('scripts', 'definitions'); }
-  async getScriptStats(): Promise<unknown> { return this.run('scripts', 'stats'); }
+  async getScriptDefinitions(): Promise<readonly ScriptTypeMetadata[]> { return this.run('scripts', 'definitions'); }
+  async getScriptStats(): Promise<readonly ScriptExecutionStatistic[]> { return this.run('scripts', 'stats'); }
   async listPlayers(): Promise<never> { return this.run('players', 'list'); }
   async sendChat(_message: string): Promise<never> { return this.run('chat', 'send'); }
   async getServerOptions(): Promise<never> { return this.run('server options', 'read'); }

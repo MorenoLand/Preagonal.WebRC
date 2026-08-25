@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ChangeEvent, FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent, FormEvent, MouseEvent as ReactMouseEvent } from 'react';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import AddIcon from '@mui/icons-material/Add';
@@ -94,7 +94,7 @@ function FeatureContent({ item, connectionState, gameServerApi, onAction, server
     case 'chat': return <ChatPanel item={item} connectionState={connectionState} onAction={onAction} />;
     case 'players': return <PlayersPanel item={item} onAction={onAction} />;
     case 'servers': return <ServersPanel item={item} servers={servers} status={serverDirectoryStatus} error={serverDirectoryError} onFetchServers={onFetchServers} onUseServer={onUseServer} />;
-    case 'files': return <FileBrowserPanel item={item} connectionState={connectionState} gameServerApi={gameServerApi} onAction={onAction} />;
+    case 'files': return <FileBrowserPanel item={item} connectionState={connectionState} gameServerApi={gameServerApi} />;
     case 'server-options': return <EditorPanel item={item} operation="read server options" onAction={onAction} />;
     case 'folder-config': return <EditorPanel item={item} operation="read folder config" onAction={onAction} />;
     case 'server-flags': return <EditorPanel item={item} operation="read server flags" onAction={onAction} />;
@@ -203,12 +203,13 @@ function getServerEndpoint(server: GraalServer): string | null {
   return server.ip && server.ip !== '$AUTO' ? `http://${server.ip}` : null;
 }
 
-interface FileBrowserPanelProps extends PanelFeatureProps {
+interface FileBrowserPanelProps {
+  item: NavigationItem;
   connectionState: ConnectionState;
   gameServerApi: GameServerApi | null;
 }
 
-function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: FileBrowserPanelProps) {
+function FileBrowserPanel({ item, connectionState, gameServerApi }: FileBrowserPanelProps) {
   const [path, setPath] = useState('');
   const [query, setQuery] = useState('');
   const [entries, setEntries] = useState<readonly ApiFileEntry[]>([]);
@@ -221,6 +222,15 @@ function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: Fi
   const [renameValue, setRenameValue] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [folderName, setFolderName] = useState('');
+  const [fileEditorOpen, setFileEditorOpen] = useState(false);
+  const [fileEditorEntry, setFileEditorEntry] = useState<ApiFileEntry | null>(null);
+  const [fileEditorPath, setFileEditorPath] = useState<string | null>(null);
+  const [fileEditorContent, setFileEditorContent] = useState('');
+  const [fileEditorStatus, setFileEditorStatus] = useState<FileEditorStatus>('idle');
+  const [fileEditorError, setFileEditorError] = useState<string | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const canBrowse = connectionState === 'connected' && gameServerApi !== null;
   const loadFiles = useCallback(() => {
     if (!canBrowse || !gameServerApi) return;
@@ -253,18 +263,45 @@ function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: Fi
     setSelectedEntryPath(entryPath);
     setMenu({ anchorEl });
   };
-  const openContextMenu = (event: React.MouseEvent<HTMLTableRowElement>, entry: ApiFileEntry) => {
+  const openContextMenu = (event: ReactMouseEvent<HTMLTableRowElement>, entry: ApiFileEntry) => {
     event.preventDefault();
     const entryPath = getFileEntryPath(path, entry);
     setSelectedEntryPath(entryPath);
     setMenu({ position: { top: event.clientY, left: event.clientX } });
+  };
+  const openFileEditor = (entry: ApiFileEntry) => {
+    const entryPath = getFileEntryPath(path, entry);
+    closeMenu();
+    setSelectedEntryPath(entryPath);
+    setFileEditorEntry(entry);
+    setFileEditorPath(entryPath);
+    setFileEditorContent('');
+    setFileEditorError(null);
+    setFileEditorStatus('loading');
+    setFileEditorOpen(true);
+    if (!canBrowse || !gameServerApi) return;
+    void gameServerApi.getFileContent(entryPath).then(content => {
+      setFileEditorContent(content);
+      setFileEditorStatus('ready');
+    }).catch(reason => {
+      setFileEditorStatus('error');
+      setFileEditorError(getFileOperationError(reason, 'File read'));
+    });
   };
   const openEntry = (entry: ApiFileEntry) => {
     closeMenu();
     if (entry.isDirectory) {
       setSelectedEntryPath(null);
       setPath(getFileEntryPath(path, entry));
+      return;
     }
+    openFileEditor(entry);
+  };
+  const openCreateFolder = () => {
+    closeMenu();
+    setFolderName('');
+    setActionError(null);
+    setCreateFolderOpen(true);
   };
   const openRename = () => {
     if (!selectedEntry) return;
@@ -301,6 +338,44 @@ function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: Fi
       loadFiles();
     }).catch(reason => setActionError(getFileOperationError(reason, 'Delete'))).finally(() => setActionBusy(false));
   };
+  const handleCreateFolder = () => {
+    const name = folderName.trim();
+    if (!canBrowse || !gameServerApi || !name) return;
+    if (name.includes('/') || name.includes('\\')) {
+      setActionError('Folder names cannot contain path separators.');
+      return;
+    }
+    const target = [path, name].filter(Boolean).join('/');
+    setActionBusy(true);
+    setActionError(null);
+    void gameServerApi.putFile(target, undefined, { directory: true }).then(() => {
+      setCreateFolderOpen(false);
+      setFolderName('');
+      loadFiles();
+    }).catch(reason => setActionError(getFileOperationError(reason, 'Create folder'))).finally(() => setActionBusy(false));
+  };
+  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !canBrowse || !gameServerApi) return;
+    const target = [path, file.name].filter(Boolean).join('/');
+    setActionBusy(true);
+    setActionError(null);
+    void gameServerApi.putFile(target, file).then(loadFiles).catch(reason => setActionError(getFileOperationError(reason, 'Upload'))).finally(() => setActionBusy(false));
+  };
+  const saveFile = () => {
+    if (!fileEditorPath || !fileEditorEntry || !canBrowse || !gameServerApi || fileEditorStatus === 'loading') return;
+    setFileEditorStatus('loading');
+    setFileEditorError(null);
+    const file = new File([fileEditorContent], fileEditorEntry.name, { type: 'text/plain' });
+    void gameServerApi.putFile(fileEditorPath, file, { overwrite: true }).then(() => {
+      setFileEditorStatus('ready');
+      loadFiles();
+    }).catch(reason => {
+      setFileEditorStatus('error');
+      setFileEditorError(getFileOperationError(reason, 'Save'));
+    });
+  };
   const rows = visibleEntries.map(entry => {
     const entryPath = entry.path || [path, entry.name].filter(Boolean).join('/');
     const selected = selectedEntryPath === entryPath;
@@ -309,23 +384,30 @@ function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: Fi
   const emptyTitle = query ? 'No matching files' : 'No files in this folder';
   return <FeaturePanel title={item.label} description={item.description} icon={item.icon}>
     <ToolRow end={<>
-      <Button className="rc-button rc-button-muted" onClick={loadFiles} disabled={!canBrowse || status === 'loading'} startIcon={<RefreshIcon />}>Refresh</Button>
-      <Button className="rc-button rc-button-muted" onClick={() => onAction(item.id, 'create directory')} disabled={!canBrowse} startIcon={<CreateNewFolderOutlinedIcon />}>New folder</Button>
-      <Button className="rc-button rc-button-primary" onClick={() => onAction(item.id, 'upload file')} disabled={!canBrowse} startIcon={<UploadFileIcon />}>Upload</Button>
+      <Button className="rc-button rc-button-muted" onClick={loadFiles} disabled={!canBrowse || status === 'loading' || actionBusy} startIcon={<RefreshIcon />}>Refresh</Button>
+      <Button className="rc-button rc-button-muted" onClick={openCreateFolder} disabled={!canBrowse || actionBusy} startIcon={<CreateNewFolderOutlinedIcon />}>New folder</Button>
+      <Button className="rc-button rc-button-primary" onClick={() => uploadInputRef.current?.click()} disabled={!canBrowse || actionBusy} startIcon={<UploadFileIcon />}>Upload</Button>
     </>}>
       <TextField className="rc-text-field compact-field" label="Filter files" placeholder="Name or path" value={query} onChange={event => setQuery(event.target.value)} InputProps={{ startAdornment: <SearchIcon className="field-icon" /> }} />
     </ToolRow>
+    <input ref={uploadInputRef} className="file-upload-input" type="file" aria-label="Choose a file to upload" onChange={handleFileUpload} />
+    {actionError && <div className="file-action-error" role="alert">{actionError}</div>}
     <div className="file-browser-path"><Button className="path-button" disabled={!path} onClick={() => setPath('')} startIcon={<ArrowBackIcon />}>Root</Button><span>/</span><strong>{path || 'content root'}</strong></div>
     {!canBrowse && <EmptyState title="Connect to browse files" description="Authenticate to the GameServer API to list files allowed by the account." icon={item.icon} />}
     {canBrowse && status === 'loading' && <EmptyState title="Loading files" description="Reading the current content directory from the GameServer API." icon={item.icon} />}
     {canBrowse && status === 'error' && <EmptyState title="Unable to load files" description={error ?? 'The GameServer API did not return a file listing.'} icon={item.icon} action={<Button className="rc-button rc-button-muted" onClick={loadFiles}>Try again</Button>} />}
     {canBrowse && status === 'ready' && <DataTable columns={['Name', 'Type', 'Size', 'Modified', '']} emptyTitle={emptyTitle} emptyDescription="No entries matched the current folder and filter." >{rows.length > 0 ? rows : undefined}</DataTable>}
     <Menu open={Boolean(menu)} onClose={closeMenu} anchorEl={menu?.anchorEl} anchorReference={menu?.position ? 'anchorPosition' : 'anchorEl'} anchorPosition={menu?.position} PaperProps={{ className: 'file-context-menu-paper' }}>
-      <MenuItem disabled={!selectedEntry?.isDirectory} onClick={() => selectedEntry && openEntry(selectedEntry)}>Open</MenuItem>
-      <MenuItem disabled title="The current GameServer API does not expose file contents for editing">Edit</MenuItem>
+      <MenuItem disabled={!selectedEntry} onClick={() => selectedEntry && openEntry(selectedEntry)}>Open</MenuItem>
+      <MenuItem disabled={!selectedEntry || Boolean(selectedEntry.isDirectory)} onClick={() => selectedEntry && openFileEditor(selectedEntry)}>Edit</MenuItem>
       <MenuItem disabled={!selectedEntry} onClick={openRename}>Rename</MenuItem>
       <MenuItem disabled={!selectedEntry} onClick={openDelete}>Delete</MenuItem>
     </Menu>
+    <Dialog open={createFolderOpen} onClose={() => !actionBusy && setCreateFolderOpen(false)} fullWidth maxWidth="xs">
+      <DialogTitle>New folder</DialogTitle>
+      <DialogContent><TextField autoFocus className="rc-text-field" label="Folder name" value={folderName} onChange={event => setFolderName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') handleCreateFolder(); }} fullWidth error={Boolean(actionError)} helperText={actionError ?? 'The folder will be created in the current directory.'} /></DialogContent>
+      <DialogActions><Button onClick={() => setCreateFolderOpen(false)} disabled={actionBusy}>Cancel</Button><Button onClick={handleCreateFolder} disabled={actionBusy || !folderName.trim()}>Create</Button></DialogActions>
+    </Dialog>
     <Dialog open={renameOpen} onClose={() => !actionBusy && setRenameOpen(false)} fullWidth maxWidth="xs">
       <DialogTitle>Rename {selectedEntry?.name}</DialogTitle>
       <DialogContent><TextField autoFocus className="rc-text-field" label="New name" value={renameValue} onChange={event => setRenameValue(event.target.value)} fullWidth error={Boolean(actionError)} helperText={actionError ?? 'The name stays relative to the current folder.'} /></DialogContent>
@@ -336,10 +418,20 @@ function FileBrowserPanel({ item, onAction, connectionState, gameServerApi }: Fi
       <DialogContent><span className="dialog-copy">This removes the selected {selectedEntry?.isDirectory ? 'directory' : 'file'} from the GameServer content root.</span>{actionError && <div className="file-action-error" role="alert">{actionError}</div>}</DialogContent>
       <DialogActions><Button onClick={() => setDeleteOpen(false)} disabled={actionBusy}>Cancel</Button><Button color="error" onClick={handleDelete} disabled={actionBusy}>Delete</Button></DialogActions>
     </Dialog>
+    <Dialog open={fileEditorOpen} onClose={() => !actionBusy && setFileEditorOpen(false)} fullWidth maxWidth="lg" className="file-editor-dialog">
+      <DialogTitle>Edit {fileEditorEntry?.name}</DialogTitle>
+      <DialogContent dividers>
+        {fileEditorStatus === 'loading' && <div className="file-editor-state">Loading file…</div>}
+        {fileEditorStatus === 'error' && <div className="file-editor-state" role="alert">{fileEditorError}</div>}
+        {fileEditorStatus === 'ready' && <CodeEditor ariaLabel={`Edit ${fileEditorEntry?.name ?? 'file'}`} language="plaintext" path={`gameserver://${fileEditorPath ?? ''}`} value={fileEditorContent} onChange={setFileEditorContent} />}
+      </DialogContent>
+      <DialogActions><Button onClick={() => setFileEditorOpen(false)} disabled={actionBusy}>Close</Button><Button onClick={saveFile} disabled={actionBusy || fileEditorStatus !== 'ready'}>Save</Button></DialogActions>
+    </Dialog>
   </FeaturePanel>;
 }
 
 type FileBrowserStatus = 'idle' | 'loading' | 'ready' | 'error';
+type FileEditorStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 interface FileMenuState {
   anchorEl?: HTMLElement;
